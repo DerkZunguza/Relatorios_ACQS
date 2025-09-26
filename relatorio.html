@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Relatório ACQS</title>
+
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .form {
+            width: 50%;
+        }
+
+        form h1,
+        form h2 {
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+
+        label {
+            display: block;
+            margin-top: 10px;
+        }
+
+        input,
+        textarea {
+            width: 100%;
+            margin-top: 5px;
+            margin-bottom: 15px;
+            padding: 8px;
+            box-sizing: border-box;
+        }
+
+        hr {
+            margin: 20px 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="form">
+        <form action="">
+            <h1>Relatório da Célula {Nome da célula}</h1>
+
+            <h2>Dados gerais</h2>
+            <label>Nome da célula:</label>
+            <input type="text" placeholder="Ex: Unizambeze">
+
+            <label>Local do culto:</label>
+            <input type="text" placeholder="Ex: Campo do Matacuane, próximo à padaria Chuabo">
+
+            <h4>Hora do Culto:</h4>
+            <div>
+                <label for="">Inicio</label>
+                <input type="time" name="inicio">
+                
+                <label for="">Inicio</label>
+                <input type="time" name="fim" >
+            </div>
+
+            <label>Moderador do culto:</label>
+            <input type="text">
+            <hr>
+
+            <h2>Momento de intercessão</h2>
+            <label>Intercederam a favor do culto:</label>
+            <textarea rows="5" placeholder="Digite os nomes dos intercessores"></textarea>
+
+            <h4>Hora da intercessão:</h4>
+            <div>
+                <label for="">Inicio</label>
+                <input type="time" name="inicio">
+                
+                <label for="">Inicio</label>
+                <input type="time" name="fim" >
+            </div>
+
+            <h2>Momento da oração</h2>
+            <label>Pontos de oração:</label>
+            <textarea rows="5" placeholder="Digite os pontos de oração aqui"></textarea>
+            <hr>
+
+            <h2>Momento da palavra</h2>
+            <label>Pregador evangelista:</label>
+            <input type="text">
+
+            <label>Pregador principal:</label>
+            <input type="text">
+
+            <label>Tema da pregação:</label>
+            <input type="text">
+
+            <label>Notas da pregação:</label>
+            <textarea rows="5" placeholder="Digite os versículos e as notas"></textarea>
+            <hr>
+
+            <h2>Estatística</h2>
+            <label>Lista de presenças:</label>
+            <textarea rows="5"></textarea>
+
+            <label>Número de pessoas que vieram pela 1ª vez:</label>
+            <input type="number">
+
+            <label>Número de pessoas que receberam a Jesus:</label>
+            <input type="number">
+
+            <label>Número de pessoas batizadas:</label>
+            <input type="number">
+
+            <label>Número de participantes:</label>
+            <input type="number">
+        </form>
+    </div>
+</body>
+
+</html>
