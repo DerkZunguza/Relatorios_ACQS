@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Relatório ACQS</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .form {
+            width: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        form h1,
+        form h2 {
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+        label {
+            display: block;
+            margin-top: 10px;
+        }
+        input,
+        textarea {
+            width: 100%;
+            margin-top: 5px;
+            margin-bottom: 15px;
+            padding: 8px;
+            box-sizing: border-box;
+        }
+        hr {
+            margin: 20px 0;
+        }
+        button {
+            width: 50%;
+            margin: 15px auto;
+            padding: 8px;
+            border: none;
+            border-radius: 2px;
+            box-sizing: border-box;
+            background-color: black;
+            color: white;
+            display: block;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+        }
+        .modal-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px;
+            max-width: 80%;
+            max-height: 80%;
+            overflow-y: auto;
+        }
+        .relatorio-preview {
+            white-space: pre-wrap;
+            background: #f9f9f9;
+            padding: 10px;
+            border: 1px solid #ddd;
+        }
+        .success-message {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: green;
+            color: white;
+            padding: 10px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="form">
+        <form id="relatorioForm">
+            <h1>Relatório da Célula {Nome da célula}</h1>
+            <h2>Dados gerais</h2>
+            <label>Nome da célula:</label>
+            <input type="text" id="nomeCelula" placeholder="Ex: Unizambeze">
+            <label>Local do culto:</label>
+            <input type="text" id="localCulto" placeholder="Ex: Campo do Matacuane, próximo à padaria Chuabo">
+            <h4>Hora do Culto:</h4>
+            <div>
+                <label for="">Inicio</label>
+                <input type="time" id="cultoInicio">
+                
+                <label for="">Fim</label>
+                <input type="time" id="cultoFim">
+            </div>
+            <label>Moderador do culto:</label>
+            <input type="text" id="moderador">
+            <hr>
+            <h2>Momento de intercessão</h2>
+            <label>Intercederam a favor do culto:</label>
+            <textarea rows="5" id="intercessores" placeholder="Digite os nomes dos intercessores"></textarea>
+            <h4>Hora da intercessão:</h4>
+            <div>
+                <label for="">Inicio</label>
+                <input type="time" id="intercessaoInicio">
+                
+                <label for="">Fim</label>
+                <input type="time" id="intercessaoFim">
+            </div>
+            <h2>Momento da oração</h2>
+            <label>Pontos de oração:</label>
+            <textarea rows="5" id="pontosOracao" placeholder="Digite os pontos de oração aqui"></textarea>
+            <hr>
+            <h2>Momento da palavra</h2>
+            <label>Pregador evangelista:</label>
+            <input type="text" id="pregadorEvangelista">
+            <label>Pregador principal:</label>
+            <input type="text" id="pregadorPrincipal">
+            <label>Tema da pregação:</label>
+            <input type="text" id="temaPregacao">
+            <label>Notas da pregação:</label>
+            <textarea rows="5" id="notasPregacao" placeholder="Digite os versículos e as notas"></textarea>
+            <hr>
+            <h2>Estatística</h2>
+            <label>Lista de presenças:</label>
+            <textarea rows="5" id="listaPresencas"></textarea>
+            <label>Número de pessoas que vieram pela 1ª vez:</label>
+            <input type="number" id="primeiraVez" value="0">
+            <label>Número de pessoas que receberam a Jesus:</label>
+            <input type="number" id="receberamJesus" value="0">
+            <label>Número de pessoas batizadas:</label>
+            <input type="number" id="batizados" value="0">
+            <label>Número de participantes:</label>
+            <input type="number" id="participantes" value="0">
+            
+            <button type="button" onclick="gerarPDF()">Baixar PDF</button>
+            <button type="button" onclick="gerarTXT()">Baixar TXT</button>
+            <button type="button" onclick="mostrarTexto()">Copiar Texto</button>
+        </form>
+    </div>
+
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <h2>Relatório Gerado</h2>
+            <div class="relatorio-preview" id="relatorioTexto"></div>
+            <button onclick="copiarTexto()">Copiar</button>
+            <button onclick="fecharModal()">Fechar</button>
+        </div>
+    </div>
+
+    <div id="successMessage" class="success-message">
+        Texto copiado!
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
