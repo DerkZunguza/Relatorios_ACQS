@@ -10,10 +10,18 @@
             display: flex;
             justify-content: center;
             align-items: center;
+            margin: 0;
+            background-color: #fafafa;
+            padding: 20p
         }
         .form {
             width: 50%;
+            max-width: 700px;
             display: flex;
+            background: white;
+            border-radius: 8px;
+            padding: 20px 30px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
             justify-content: center;
             align-items: center;
         }
@@ -21,10 +29,13 @@
         form h2 {
             margin-top: 20px;
             margin-bottom: 10px;
+            color: #222;
         }
         label {
             display: block;
             margin-top: 10px;
+            font-weight: bold;
+            color: #333;
         }
         input,
         textarea {
@@ -32,10 +43,15 @@
             margin-top: 5px;
             margin-bottom: 15px;
             padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
             box-sizing: border-box;
+            font-size: 1rem;
         }
         hr {
             margin: 20px 0;
+            border: 0;
+            border-top: 1px solid #ddd;
         }
         button {
             width: 50%;
@@ -47,6 +63,10 @@
             background-color: black;
             color: white;
             display: block;
+            font-size: 1rem;
+        }
+        button:hover {
+            background-color: #333;
         }
         .modal {
             display: none;
@@ -92,14 +112,29 @@
 
     @media (max-width: 768px) {
         body {
-            flex-direction: column;
-            padding: 10px;
+                display: block;
+                padding: 10px;
+        }
+            .form {
+                width: 90%;
+                margin: 0 auto;
+        }
+            button {
+                width: 80%;
         }
     }
 
     @media (max-width: 480px) {
         form h1, form h2 {
             font-size: 1.2rem;
+        }
+        input, textarea {
+            font-size: 0.9rem;
+            padding: 6px;
+        }
+        button {
+            width: 100%;
+            font-size: 0.95rem;
         }
     }
         
