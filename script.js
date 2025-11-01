@@ -533,3 +533,98 @@ if ('serviceWorker' in navigator) {
             .catch(err => console.log('Erro ao registrar Service Worker:', err));
     });
 }
+
+// PWA Install Prompt
+let deferredPrompt;
+const installPrompt = document.getElementById('installPrompt');
+const installButton = document.getElementById('installButton');
+const dismissInstall = document.getElementById('dismissInstall');
+
+// Detectar quando o navegador está pronto para instalar
+window.addEventListener('beforeinstallprompt', (e) => {
+    // Prevenir o prompt automático
+    e.preventDefault();
+    // Guardar o evento para usar depois
+    deferredPrompt = e;
+    // Mostrar nosso botão customizado
+    installPrompt.style.display = 'block';
+    console.log('PWA pode ser instalado!');
+});
+
+// Quando clicar no botão de instalar
+installButton.addEventListener('click', async () => {
+    if (!deferredPrompt) {
+        // Se não tiver o prompt, mostrar instruções manuais
+        mostrarInstrucoesInstalacao();
+        return;
+    }
+    
+    // Mostrar o prompt de instalação
+    deferredPrompt.prompt();
+    
+    // Esperar pela escolha do usuário
+    const { outcome } = await deferredPrompt.userChoice;
+    console.log(`Usuário ${outcome === 'accepted' ? 'aceitou' : 'recusou'} instalar`);
+    
+    // Limpar o prompt
+    deferredPrompt = null;
+    installPrompt.style.display = 'none';
+});
+
+// Quando clicar em dispensar
+dismissInstall.addEventListener('click', () => {
+    installPrompt.style.display = 'none';
+    // Salvar que o usuário dispensou (não mostrar novamente nesta sessão)
+    sessionStorage.setItem('installDismissed', 'true');
+});
+
+// Detectar quando o app foi instalado
+window.addEventListener('appinstalled', () => {
+    console.log('PWA instalado com sucesso!');
+    installPrompt.style.display = 'none';
+    mostrarMensagemSucesso('App instalado com sucesso!');
+});
+
+// Mostrar prompt se não foi dispensado
+window.addEventListener('load', () => {
+    if (!sessionStorage.getItem('installDismissed')) {
+        // Esperar 3 segundos antes de mostrar
+        setTimeout(() => {
+            // Verificar se já está instalado
+            if (window.matchMedia('(display-mode: standalone)').matches) {
+                console.log('App já está instalado');
+                return;
+            }
+            // Se tiver o deferredPrompt, mostrar
+            if (deferredPrompt) {
+                installPrompt.style.display = 'block';
+            } else {
+                // Se não tiver, pode ser iOS ou navegador que não suporta
+                // Mostrar instruções após 5 segundos
+                setTimeout(() => {
+                    if (!sessionStorage.getItem('installDismissed')) {
+                        mostrarInstrucoesInstalacao();
+                    }
+                }, 5000);
+            }
+        }, 3000);
+    }
+});
+
+// Função para mostrar instruções manuais
+function mostrarInstrucoesInstalacao() {
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const isAndroid = /Android/.test(navigator.userAgent);
+    
+    let mensagem = '';
+    
+    if (isIOS) {
+        mensagem = ` Para instalar no iOS:\n\n1. Toque no botão de compartilhar (□↑)\n2. Role para baixo\n3. Toque em "Adicionar à Tela de Início"\n4. Toque em "Adicionar"`;
+    } else if (isAndroid) {
+        mensagem = ` Para instalar no Android:\n\n1. Toque nos 3 pontinhos (⋮) no canto\n2. Selecione "Instalar app" ou "Adicionar à tela inicial"\n3. Confirme a instalação`;
+    } else {
+        mensagem = ` Para instalar:\n\n1. Abra o menu do navegador\n2. Procure "Instalar" ou "Adicionar à tela inicial"\n3. Confirme a instalação`;
+    }
+    
+    alert(mensagem);
+}
