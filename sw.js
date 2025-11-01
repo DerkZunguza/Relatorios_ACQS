@@ -61,7 +61,7 @@ self.addEventListener('fetch', event => {
           
           return response;
         }).catch(() => {
-          // Se falhar, tenta retornar do cache novamente
+          // Se falhar, tenta retorn sim concordoar do cache novamente
           return caches.match(event.request);
         });
       })
