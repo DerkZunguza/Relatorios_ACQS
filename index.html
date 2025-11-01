@@ -3,51 +3,157 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#000000">
+    <meta name="description" content="Sistema de Relatórios ACQS - Gestão de Células">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon-192.png">
     <title>Relatório ACQS</title>
+    
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- jsPDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
         body {
-            display: flex;
-            justify-content: center;
-            align-items: center;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: #fafafa;
+            padding: 20px;
         }
-        .form {
-            width: 50%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+        
+        .container {
+            max-width: 700px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            padding: 20px 30px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
         }
-        form h1,
-        form h2 {
+        
+        .page {
+            display: none;
+        }
+        
+        .page.active {
+            display: block;
+        }
+        
+        h1, h2 {
             margin-top: 20px;
             margin-bottom: 10px;
+            color: #222;
         }
+        
+        h1 {
+            font-size: 1.5rem;
+        }
+        
+        h2 {
+            font-size: 1.2rem;
+        }
+        
         label {
             display: block;
             margin-top: 10px;
+            font-weight: bold;
+            color: #333;
         }
-        input,
-        textarea {
+        
+        input, textarea {
             width: 100%;
             margin-top: 5px;
             margin-bottom: 15px;
             padding: 8px;
-            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 1rem;
         }
+        
+        textarea {
+            resize: vertical;
+        }
+        
         hr {
             margin: 20px 0;
+            border: 0;
+            border-top: 1px solid #ddd;
         }
+        
         button {
-            width: 50%;
-            margin: 15px auto;
-            padding: 8px;
+            padding: 10px 20px;
             border: none;
-            border-radius: 2px;
-            box-sizing: border-box;
+            border-radius: 4px;
             background-color: black;
             color: white;
-            display: block;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
         }
+        
+        button:hover {
+            background-color: #333;
+        }
+        
+        button:active {
+            transform: scale(0.98);
+        }
+        
+        button i {
+            margin-right: 8px;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        
+        .button-group button {
+            flex: 1;
+            min-width: 140px;
+        }
+        
+        .btn-success {
+            background-color: #2e7d32;
+        }
+        
+        .btn-success:hover {
+            background-color: #388e3c;
+        }
+        
+        .btn-info {
+            background-color: #0288d1;
+        }
+        
+        .btn-info:hover {
+            background-color: #039be5;
+        }
+        
+        .btn-secundario {
+            background-color: #555;
+        }
+        
+        .btn-secundario:hover {
+            background-color: #777;
+        }
+        
+        .btn-perigo {
+            background-color: #d32f2f;
+        }
+        
+        .btn-perigo:hover {
+            background-color: #f44336;
+        }
+        
         .modal {
             display: none;
             position: fixed;
@@ -56,7 +162,9 @@
             width: 100%;
             height: 100%;
             background: rgba(0,0,0,0.5);
+            z-index: 1000;
         }
+        
         .modal-content {
             position: absolute;
             top: 50%;
@@ -64,101 +172,384 @@
             transform: translate(-50%, -50%);
             background: white;
             padding: 20px;
-            max-width: 80%;
+            max-width: 90%;
             max-height: 80%;
             overflow-y: auto;
+            border-radius: 8px;
         }
+        
         .relatorio-preview {
             white-space: pre-wrap;
             background: #f9f9f9;
             padding: 10px;
             border: 1px solid #ddd;
+            font-family: monospace;
+            font-size: 0.9rem;
         }
+        
         .success-message {
             position: fixed;
             top: 20px;
             right: 20px;
-            background: green;
+            background: #2e7d32;
             color: white;
-            padding: 10px;
+            padding: 15px 20px;
             display: none;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            z-index: 2000;
+        }
+        
+        .mes-grupo {
+            margin-bottom: 30px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+        }
+        
+        .mes-grupo h3 {
+            margin-top: 0;
+            color: #333;
+            border-bottom: 2px solid #000;
+            padding-bottom: 10px;
+        }
+        
+        .relatorios-lista {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .relatorio-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 4px;
+            border: 1px solid #e0e0e0;
+        }
+        
+        .relatorio-info {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        .relatorio-info strong {
+            font-size: 1rem;
+        }
+        
+        .relatorio-info span {
+            font-size: 0.85rem;
+            color: #666;
+        }
+        
+        .relatorio-acoes {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .relatorio-acoes button {
+            padding: 6px 12px;
+            font-size: 0.85rem;
+        }
+        
+        input[type="file"] {
+            display: none;
+        }
+        
+        .toolbar {
+            position: sticky;
+            top: 0;
+            background: white;
+            padding: 15px;
+            border-bottom: 2px solid #000;
+            margin: -20px -30px 20px -30px;
+            z-index: 100;
+        }
+        
+        .toolbar h1 {
+            margin: 0 0 15px 0;
+        }
+        
+        .nav-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: #000;
+            display: flex;
+            justify-content: space-around;
+            padding: 10px 0;
+            box-shadow: 0 -2px 8px rgba(0,0,0,0.2);
+            z-index: 1000;
+        }
+        
+        .nav-item {
+            flex: 1;
+            text-align: center;
+            color: white;
+            cursor: pointer;
+            padding: 10px;
+            transition: background-color 0.2s;
+        }
+        
+        .nav-item:hover {
+            background-color: #333;
+        }
+        
+        .nav-item.active {
+            background-color: #2e7d32;
+        }
+        
+        .nav-item i {
+            display: block;
+            font-size: 1.5rem;
+            margin-bottom: 5px;
+        }
+        
+        .nav-item span {
+            font-size: 0.75rem;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .stat-card {
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .stat-card i {
+            font-size: 2rem;
+            color: #2e7d32;
+            margin-bottom: 10px;
+        }
+        
+        .stat-card .number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #000;
+            margin: 10px 0;
+        }
+        
+        .stat-card .label {
+            font-size: 0.9rem;
+            color: #666;
+        }
+        
+        body {
+            padding-bottom: 80px;
+        }
+        
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+                padding-bottom: 80px;
+            }
+            
+            .container {
+                padding: 15px;
+            }
+            
+            .toolbar {
+                margin: -15px -15px 20px -15px;
+            }
+            
+            .button-group button {
+                width: 100%;
+                min-width: auto;
+            }
+            
+            .relatorio-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+            
+            .relatorio-acoes {
+                width: 100%;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            h1 {
+                font-size: 1.2rem;
+            }
+            
+            input, textarea {
+                font-size: 0.9rem;
+                padding: 6px;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="form">
-        <form id="relatorioForm">
-            <h1>Relatório da Célula {Nome da célula}</h1>
-            <h2>Dados gerais</h2>
-            <label>Nome da célula:</label>
-            <input type="text" id="nomeCelula" placeholder="Ex: Unizambeze">
-            <label>Local do culto:</label>
-            <input type="text" id="localCulto" placeholder="Ex: Campo do Matacuane, próximo à padaria Chuabo">
-            <h4>Hora do Culto:</h4>
-            <div>
-                <label for="">Inicio</label>
+    <div class="container">
+        <!-- PÁGINA: FORMULÁRIO -->
+        <div id="page-form" class="page active">
+            <div class="toolbar">
+                <h1>Relatório da Célula</h1>
+                <div class="button-group">
+                    <button type="button" onclick="salvarRelatorioAtual()" class="btn-success">
+                        <i class="fas fa-save"></i>Salvar
+                    </button>
+                    <button type="button" onclick="exportarRelatorios()" class="btn-secundario">
+                        <i class="fas fa-download"></i>Exportar
+                    </button>
+                    <button type="button" onclick="document.getElementById('importFile').click()" class="btn-secundario">
+                        <i class="fas fa-upload"></i>Importar
+                    </button>
+                    <button type="button" onclick="limparFormulario()" class="btn-secundario">
+                        <i class="fas fa-trash"></i>Limpar
+                    </button>
+                </div>
+                <input type="file" id="importFile" accept=".json" onchange="importarRelatorios(event)">
+            </div>
+
+            <form id="relatorioForm">
+                <h2>Dados gerais</h2>
+                <label>Nome da célula:</label>
+                <input type="text" id="nomeCelula" placeholder="Ex: Unizambeze">
+                
+                <label>Local do culto:</label>
+                <input type="text" id="localCulto" placeholder="Ex: Campo do Matacuane">
+                
+                <h4>Hora do Culto:</h4>
+                <label>Início</label>
                 <input type="time" id="cultoInicio">
                 
-                <label for="">Fim</label>
+                <label>Fim</label>
                 <input type="time" id="cultoFim">
-            </div>
-            <label>Moderador do culto:</label>
-            <input type="text" id="moderador">
-            <hr>
-            <h2>Momento de intercessão</h2>
-            <label>Intercederam a favor do culto:</label>
-            <textarea rows="5" id="intercessores" placeholder="Digite os nomes dos intercessores"></textarea>
-            <h4>Hora da intercessão:</h4>
-            <div>
-                <label for="">Inicio</label>
+                
+                <label>Moderador do culto:</label>
+                <input type="text" id="moderador">
+                
+                <hr>
+                <h2>Momento de intercessão</h2>
+                <label>Intercederam a favor do culto:</label>
+                <textarea rows="5" id="intercessores" placeholder="Digite os nomes dos intercessores"></textarea>
+                
+                <h4>Hora da intercessão:</h4>
+                <label>Início</label>
                 <input type="time" id="intercessaoInicio">
                 
-                <label for="">Fim</label>
+                <label>Fim</label>
                 <input type="time" id="intercessaoFim">
+                
+                <h2>Momento da oração</h2>
+                <label>Pontos de oração:</label>
+                <textarea rows="5" id="pontosOracao" placeholder="Digite os pontos de oração"></textarea>
+                
+                <hr>
+                <h2>Momento da palavra</h2>
+                <label>Pregador evangelista:</label>
+                <input type="text" id="pregadorEvangelista">
+                
+                <label>Pregador principal:</label>
+                <input type="text" id="pregadorPrincipal">
+                
+                <label>Tema da pregação:</label>
+                <input type="text" id="temaPregacao">
+                
+                <label>Notas da pregação:</label>
+                <textarea rows="5" id="notasPregacao" placeholder="Digite os versículos e notas"></textarea>
+                
+                <hr>
+                <h2>Estatística</h2>
+                <label>Lista de presenças:</label>
+                <textarea rows="5" id="listaPresencas"></textarea>
+                
+                <label>Pessoas que vieram pela 1ª vez:</label>
+                <input type="number" id="primeiraVez" value="0">
+                
+                <label>Pessoas que receberam a Jesus:</label>
+                <input type="number" id="receberamJesus" value="0">
+                
+                <label>Pessoas batizadas:</label>
+                <input type="number" id="batizados" value="0">
+                
+                <label>Total de participantes:</label>
+                <input type="number" id="participantes" value="0">
+                
+                <div class="button-group">
+                    <button type="button" onclick="gerarPDF()">
+                        <i class="fas fa-file-pdf"></i>Baixar PDF
+                    </button>
+                    <button type="button" onclick="gerarTXT()">
+                        <i class="fas fa-file-alt"></i>Baixar TXT
+                    </button>
+                    <button type="button" onclick="mostrarTexto()">
+                        <i class="fas fa-copy"></i>Copiar
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- PÁGINA: HISTÓRICO -->
+        <div id="page-historico" class="page">
+            <div class="toolbar">
+                <h1>Histórico de Relatórios</h1>
             </div>
-            <h2>Momento da oração</h2>
-            <label>Pontos de oração:</label>
-            <textarea rows="5" id="pontosOracao" placeholder="Digite os pontos de oração aqui"></textarea>
-            <hr>
-            <h2>Momento da palavra</h2>
-            <label>Pregador evangelista:</label>
-            <input type="text" id="pregadorEvangelista">
-            <label>Pregador principal:</label>
-            <input type="text" id="pregadorPrincipal">
-            <label>Tema da pregação:</label>
-            <input type="text" id="temaPregacao">
-            <label>Notas da pregação:</label>
-            <textarea rows="5" id="notasPregacao" placeholder="Digite os versículos e as notas"></textarea>
-            <hr>
-            <h2>Estatística</h2>
-            <label>Lista de presenças:</label>
-            <textarea rows="5" id="listaPresencas"></textarea>
-            <label>Número de pessoas que vieram pela 1ª vez:</label>
-            <input type="number" id="primeiraVez" value="0">
-            <label>Número de pessoas que receberam a Jesus:</label>
-            <input type="number" id="receberamJesus" value="0">
-            <label>Número de pessoas batizadas:</label>
-            <input type="number" id="batizados" value="0">
-            <label>Número de participantes:</label>
-            <input type="number" id="participantes" value="0">
-            
-            <button type="button" onclick="gerarPDF()">Baixar PDF</button>
-            <button type="button" onclick="gerarTXT()">Baixar TXT</button>
-            <button type="button" onclick="mostrarTexto()">Copiar Texto</button>
-        </form>
+            <div id="historicoConteudo"></div>
+        </div>
+
+        <!-- PÁGINA: ESTATÍSTICAS -->
+        <div id="page-stats" class="page">
+            <div class="toolbar">
+                <h1>Estatísticas</h1>
+            </div>
+            <div id="statsConteudo"></div>
+        </div>
     </div>
 
+    <!-- MODAL DE VISUALIZAÇÃO -->
     <div id="modal" class="modal">
         <div class="modal-content">
             <h2>Relatório Gerado</h2>
             <div class="relatorio-preview" id="relatorioTexto"></div>
-            <button onclick="copiarTexto()">Copiar</button>
-            <button onclick="fecharModal()">Fechar</button>
+            <div class="button-group">
+                <button onclick="copiarTexto()">
+                    <i class="fas fa-copy"></i>Copiar
+                </button>
+                <button onclick="fecharModal()">
+                    <i class="fas fa-times"></i>Fechar
+                </button>
+            </div>
         </div>
     </div>
 
+    <!-- MENSAGEM DE SUCESSO -->
     <div id="successMessage" class="success-message">
-        Texto copiado!
+        Mensagem de sucesso
+    </div>
+
+    <!-- BARRA DE NAVEGAÇÃO -->
+    <div class="nav-bar">
+        <div class="nav-item active" onclick="mostrarPagina('form')">
+            <i class="fas fa-edit"></i>
+            <span>Formulário</span>
+        </div>
+        <div class="nav-item" onclick="mostrarPagina('historico')">
+            <i class="fas fa-folder-open"></i>
+            <span>Histórico</span>
+        </div>
+        <div class="nav-item" onclick="mostrarPagina('stats')">
+            <i class="fas fa-chart-bar"></i>
+            <span>Estatísticas</span>
+        </div>
     </div>
 
     <script src="script.js"></script>
