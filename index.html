@@ -688,11 +688,11 @@
             <!-- Seção de Autenticação -->
             <div id="authSection">
                 <!-- Login -->
-                <div id="loginForm">
+                <div id="loginFormWrapper">
                     <h2>Fazer Login</h2>
                     <p style="color: #666; margin-bottom: 20px;">Entre com sua conta para sincronizar dados na nuvem</p>
                     
-                    <form onsubmit="processarLogin(event)">
+                    <form id="loginForm" onsubmit="processarLogin(event)">
                         <label>Email:</label>
                         <input type="email" id="loginEmail" required>
                         
@@ -711,11 +711,11 @@
                 </div>
 
                 <!-- Registro -->
-                <div id="registerForm" style="display: none;">
+                <div id="registerFormWrapper" style="display: none;">
                     <h2>Criar Conta</h2>
                     <p style="color: #666; margin-bottom: 20px;">Crie uma conta para salvar seus dados na nuvem</p>
                     
-                    <form onsubmit="processarRegistro(event)">
+                    <form id="registerForm" onsubmit="processarRegistro(event)">
                         <label>Email:</label>
                         <input type="email" id="registerEmail" required>
                         
@@ -807,7 +807,7 @@
         </div>
     </div>
 
-    <!-- BARRA DE NAVEGAÇÃO coemntada-->
+    <!-- BARRA DE NAVEGAÇÃO -->
     <div class="nav-bar">
         <div class="nav-item active" onclick="mostrarPagina('form')">
             <i class="fas fa-edit"></i>

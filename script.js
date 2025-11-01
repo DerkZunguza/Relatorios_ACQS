@@ -5,7 +5,7 @@ const EMAIL_KEY = 'acqs_user_email';
 const SYNC_KEY = 'acqs_last_sync';
 
 // Configuração da API
-const API_URL = 'https://relatorios-acqs-backend.onrender.com'; // ALTERAR APÓS DEPLOY
+const API_URL = 'https://seu-backend.onrender.com'; // ALTERAR APÓS DEPLOY
 const API_TIMEOUT = 60000; // 60 segundos (para cold start do Render)
 
 // Estado da conexão
@@ -398,14 +398,14 @@ function atualizarPaginaSync() {
 
 // Mostrar formulário de registro
 function mostrarFormRegistro() {
-    document.getElementById('loginForm').style.display = 'none';
-    document.getElementById('registerForm').style.display = 'block';
+    document.getElementById('loginFormWrapper').style.display = 'none';
+    document.getElementById('registerFormWrapper').style.display = 'block';
 }
 
 // Mostrar formulário de login
 function mostrarFormLogin() {
-    document.getElementById('registerForm').style.display = 'none';
-    document.getElementById('loginForm').style.display = 'block';
+    document.getElementById('registerFormWrapper').style.display = 'none';
+    document.getElementById('loginFormWrapper').style.display = 'block';
 }
 
 // Processar registro
@@ -429,7 +429,12 @@ async function processarRegistro(event) {
     try {
         await registrarUsuario(email, password);
         mostrarMensagemSucesso('Conta criada com sucesso!');
-        document.getElementById('registerForm').reset();
+        
+        // Limpar campos manualmente
+        document.getElementById('registerEmail').value = '';
+        document.getElementById('registerPassword').value = '';
+        document.getElementById('confirmPassword').value = '';
+        
         atualizarUIAuth();
         
         // Perguntar se quer sincronizar dados existentes
@@ -453,7 +458,11 @@ async function processarLogin(event) {
     try {
         await fazerLogin(email, password);
         mostrarMensagemSucesso('Login realizado com sucesso!');
-        document.getElementById('loginForm').reset();
+        
+        // Limpar campos manualmente
+        document.getElementById('loginEmail').value = '';
+        document.getElementById('loginPassword').value = '';
+        
         atualizarUIAuth();
         
         // Perguntar se quer baixar dados da nuvem
