@@ -413,6 +413,103 @@
             padding-bottom: 80px;
         }
         
+        .online-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-left: 10px;
+            animation: pulse 2s infinite;
+        }
+        
+        .online-indicator.online {
+            background-color: #2e7d32;
+        }
+        
+        .online-indicator.offline {
+            background-color: #d32f2f;
+            animation: none;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .sync-info {
+            background: #f9f9f9;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            margin-bottom: 20px;
+        }
+        
+        .sync-info h3 {
+            margin-top: 0;
+            color: #2e7d32;
+        }
+        
+        .sync-info p {
+            margin: 10px 0;
+            color: #333;
+        }
+        
+        .sync-notice {
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+            background: #e8f5e9;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #2e7d32;
+            margin-top: 30px;
+        }
+        
+        .sync-notice i {
+            font-size: 1.5rem;
+            color: #2e7d32;
+            margin-top: 5px;
+        }
+        
+        .sync-notice p {
+            margin: 5px 0 0 0;
+            color: #666;
+            font-size: 0.9rem;
+        }
+        
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        
+        .loading-content {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            text-align: center;
+            max-width: 300px;
+        }
+        
+        .loading-content i {
+            font-size: 3rem;
+            color: #2e7d32;
+            margin-bottom: 15px;
+        }
+        
+        .loading-content p {
+            margin: 0;
+            color: #333;
+            font-weight: bold;
+        }
+        
         @media (max-width: 768px) {
             body {
                 padding: 10px;
@@ -444,6 +541,10 @@
             
             .stats-grid {
                 grid-template-columns: 1fr;
+            }
+            
+            .sync-notice {
+                flex-direction: column;
             }
         }
         
@@ -576,6 +677,96 @@
             </div>
             <div id="statsConteudo"></div>
         </div>
+
+        <!-- PÁGINA: SINCRONIZAÇÃO -->
+        <div id="page-sync" class="page">
+            <div class="toolbar">
+                <h1>Sincronização na Nuvem</h1>
+                <div class="online-indicator" id="onlineIndicator"></div>
+            </div>
+
+            <!-- Seção de Autenticação -->
+            <div id="authSection">
+                <!-- Login -->
+                <div id="loginForm">
+                    <h2>Fazer Login</h2>
+                    <p style="color: #666; margin-bottom: 20px;">Entre com sua conta para sincronizar dados na nuvem</p>
+                    
+                    <form onsubmit="processarLogin(event)">
+                        <label>Email:</label>
+                        <input type="email" id="loginEmail" required>
+                        
+                        <label>Senha:</label>
+                        <input type="password" id="loginPassword" required minlength="6">
+                        
+                        <button type="submit" class="btn-success">
+                            <i class="fas fa-sign-in-alt"></i>Entrar
+                        </button>
+                    </form>
+                    
+                    <p style="text-align: center; margin-top: 20px;">
+                        Não tem conta? 
+                        <a href="#" onclick="mostrarFormRegistro(); return false;" style="color: #2e7d32; font-weight: bold;">Criar conta</a>
+                    </p>
+                </div>
+
+                <!-- Registro -->
+                <div id="registerForm" style="display: none;">
+                    <h2>Criar Conta</h2>
+                    <p style="color: #666; margin-bottom: 20px;">Crie uma conta para salvar seus dados na nuvem</p>
+                    
+                    <form onsubmit="processarRegistro(event)">
+                        <label>Email:</label>
+                        <input type="email" id="registerEmail" required>
+                        
+                        <label>Senha (mínimo 6 caracteres):</label>
+                        <input type="password" id="registerPassword" required minlength="6">
+                        
+                        <label>Confirmar Senha:</label>
+                        <input type="password" id="confirmPassword" required minlength="6">
+                        
+                        <button type="submit" class="btn-success">
+                            <i class="fas fa-user-plus"></i>Criar Conta
+                        </button>
+                    </form>
+                    
+                    <p style="text-align: center; margin-top: 20px;">
+                        Já tem conta? 
+                        <a href="#" onclick="mostrarFormLogin(); return false;" style="color: #2e7d32; font-weight: bold;">Fazer login</a>
+                    </p>
+                </div>
+            </div>
+
+            <!-- Seção de Sincronização -->
+            <div id="syncSection" style="display: none;">
+                <div class="sync-info">
+                    <h3>Conta Conectada</h3>
+                    <p><strong>Email:</strong> <span id="userEmail"></span></p>
+                    <p><strong>Última sincronização:</strong> <span id="lastSync">Nunca</span></p>
+                </div>
+
+                <div class="button-group" style="margin-top: 30px;">
+                    <button onclick="sincronizarParaNuvem()" class="btn-success">
+                        <i class="fas fa-cloud-upload-alt"></i>Enviar para Nuvem
+                    </button>
+                    <button onclick="baixarDaNuvem()" class="btn-info">
+                        <i class="fas fa-cloud-download-alt"></i>Baixar da Nuvem
+                    </button>
+                </div>
+
+                <div class="sync-notice">
+                    <i class="fas fa-info-circle"></i>
+                    <div>
+                        <strong>Sincronização Automática</strong>
+                        <p>Seus dados são sincronizados automaticamente a cada 7 dias quando você estiver online.</p>
+                    </div>
+                </div>
+
+                <button onclick="fazerLogout()" class="btn-secundario" style="width: 100%; margin-top: 30px;">
+                    <i class="fas fa-sign-out-alt"></i>Sair da Conta
+                </button>
+            </div>
+        </div>
     </div>
 
     <!-- MODAL DE VISUALIZAÇÃO -->
@@ -629,6 +820,10 @@
         <div class="nav-item" onclick="mostrarPagina('stats')">
             <i class="fas fa-chart-bar"></i>
             <span>Estatísticas</span>
+        </div>
+        <div class="nav-item" onclick="mostrarPagina('sync')">
+            <i class="fas fa-cloud"></i>
+            <span>Nuvem</span>
         </div>
     </div>
 

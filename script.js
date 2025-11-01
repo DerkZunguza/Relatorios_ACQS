@@ -1,5 +1,173 @@
 // Sistema de armazenamento local
 const STORAGE_KEY = 'relatorios_celula';
+const AUTH_KEY = 'acqs_auth_token';
+const EMAIL_KEY = 'acqs_user_email';
+const SYNC_KEY = 'acqs_last_sync';
+
+// Configuração da API
+const API_URL = 'https://relatorios-acqs-backend.onrender.com'; // ALTERAR APÓS DEPLOY
+const API_TIMEOUT = 60000; // 60 segundos (para cold start do Render)
+
+// Estado da conexão
+let isOnline = navigator.onLine;
+let syncInProgress = false;
+
+// Monitorar status online/offline
+window.addEventListener('online', () => {
+    isOnline = true;
+    atualizarStatusConexao();
+    console.log('✅ Conexão online');
+});
+
+window.addEventListener('offline', () => {
+    isOnline = false;
+    atualizarStatusConexao();
+    console.log('📵 Conexão offline');
+});
+
+// Atualizar indicador visual de conexão
+function atualizarStatusConexao() {
+    const indicator = document.getElementById('onlineIndicator');
+    if (indicator) {
+        if (isOnline) {
+            indicator.className = 'online-indicator online';
+            indicator.title = 'Online';
+        } else {
+            indicator.className = 'online-indicator offline';
+            indicator.title = 'Offline';
+        }
+    }
+}
+
+// ==================== AUTENTICAÇÃO ====================
+
+function getToken() {
+    return localStorage.getItem(AUTH_KEY);
+}
+
+function setToken(token) {
+    localStorage.setItem(AUTH_KEY, token);
+}
+
+function removeToken() {
+    localStorage.removeItem(AUTH_KEY);
+    localStorage.removeItem(EMAIL_KEY);
+}
+
+function getUserEmail() {
+    return localStorage.getItem(EMAIL_KEY);
+}
+
+function setUserEmail(email) {
+    localStorage.setItem(EMAIL_KEY, email);
+}
+
+function isLoggedIn() {
+    return !!getToken();
+}
+
+// Função para fazer requisições com timeout
+async function fetchWithTimeout(url, options = {}, timeout = API_TIMEOUT) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    
+    try {
+        const response = await fetch(url, {
+            ...options,
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        return response;
+    } catch (error) {
+        clearTimeout(timeoutId);
+        throw error;
+    }
+}
+
+// Registro de novo usuário
+async function registrarUsuario(email, password) {
+    if (!isOnline) {
+        throw new Error('Sem conexão com a internet');
+    }
+    
+    mostrarLoading('Criando conta...');
+    
+    try {
+        const response = await fetchWithTimeout(`${API_URL}/api/auth/register`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ email, password })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Erro ao criar conta');
+        }
+        
+        setToken(data.token);
+        setUserEmail(data.email);
+        
+        esconderLoading();
+        return data;
+        
+    } catch (error) {
+        esconderLoading();
+        if (error.name === 'AbortError') {
+            throw new Error('Tempo esgotado. O servidor pode estar iniciando. Tente novamente em 1 minuto.');
+        }
+        throw error;
+    }
+}
+
+// Login
+async function fazerLogin(email, password) {
+    if (!isOnline) {
+        throw new Error('Sem conexão com a internet');
+    }
+    
+    mostrarLoading('Fazendo login...');
+    
+    try {
+        const response = await fetchWithTimeout(`${API_URL}/api/auth/login`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ email, password })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Erro ao fazer login');
+        }
+        
+        setToken(data.token);
+        setUserEmail(data.email);
+        
+        esconderLoading();
+        return data;
+        
+    } catch (error) {
+        esconderLoading();
+        if (error.name === 'AbortError') {
+            throw new Error('Tempo esgotado. O servidor pode estar iniciando. Tente novamente em 1 minuto.');
+        }
+        throw error;
+    }
+}
+
+// Fazer logout
+function fazerLogout() {
+    if (confirm('Tem certeza que deseja sair? Os dados locais serão mantidos.')) {
+        removeToken();
+        atualizarUIAuth();
+        mostrarMensagemSucesso('Logout realizado com sucesso!');
+    }
+}
 
 // Navegação entre páginas
 function mostrarPagina(pagina) {
@@ -19,6 +187,308 @@ function mostrarPagina(pagina) {
         document.getElementById('page-stats').classList.add('active');
         document.querySelector('.nav-item:nth-child(3)').classList.add('active');
         carregarEstatisticas();
+    } else if (pagina === 'sync') {
+        document.getElementById('page-sync').classList.add('active');
+        document.querySelector('.nav-item:nth-child(4)').classList.add('active');
+        atualizarPaginaSync();
+    }
+}
+
+// ==================== SINCRONIZAÇÃO ====================
+
+// Sincronizar (UPLOAD) relatórios para nuvem
+async function sincronizarParaNuvem() {
+    if (!isOnline) {
+        alert('Sem conexão com a internet. Conecte-se e tente novamente.');
+        return;
+    }
+    
+    if (!isLoggedIn()) {
+        alert('Você precisa fazer login primeiro!');
+        mostrarPagina('sync');
+        return;
+    }
+    
+    if (syncInProgress) {
+        return;
+    }
+    
+    syncInProgress = true;
+    mostrarLoading('Sincronizando com a nuvem...');
+    
+    try {
+        const relatorios = carregarRelatorios();
+        
+        const response = await fetchWithTimeout(`${API_URL}/api/sync/upload`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${getToken()}`
+            },
+            body: JSON.stringify({ relatorios })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Erro ao sincronizar');
+        }
+        
+        // Salvar data da última sincronização
+        localStorage.setItem(SYNC_KEY, new Date().toISOString());
+        
+        esconderLoading();
+        syncInProgress = false;
+        mostrarMensagemSucesso(`Sincronizado! ${data.total} relatórios na nuvem.`);
+        atualizarUIAuth();
+        
+    } catch (error) {
+        esconderLoading();
+        syncInProgress = false;
+        console.error('Erro ao sincronizar:', error);
+        
+        if (error.name === 'AbortError') {
+            alert('Tempo esgotado. O servidor pode estar iniciando (Render gratuito). Aguarde 1 minuto e tente novamente.');
+        } else {
+            alert('Erro ao sincronizar: ' + error.message);
+        }
+    }
+}
+
+// Baixar (DOWNLOAD) relatórios da nuvem
+async function baixarDaNuvem() {
+    if (!isOnline) {
+        alert('Sem conexão com a internet. Conecte-se e tente novamente.');
+        return;
+    }
+    
+    if (!isLoggedIn()) {
+        alert('Você precisa fazer login primeiro!');
+        return;
+    }
+    
+    if (syncInProgress) {
+        return;
+    }
+    
+    syncInProgress = true;
+    mostrarLoading('Baixando dados da nuvem...');
+    
+    try {
+        const response = await fetchWithTimeout(`${API_URL}/api/sync/download`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${getToken()}`
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Erro ao baixar dados');
+        }
+        
+        if (data.relatorios.length === 0) {
+            esconderLoading();
+            syncInProgress = false;
+            alert('Nenhum dado encontrado na nuvem.');
+            return;
+        }
+        
+        // Mesclar com dados locais
+        const relatoriosLocais = carregarRelatorios();
+        const idsLocais = new Set(relatoriosLocais.map(r => r.id));
+        
+        let novos = 0;
+        data.relatorios.forEach(relatorio => {
+            if (!idsLocais.has(relatorio.id)) {
+                relatoriosLocais.push(relatorio);
+                novos++;
+            }
+        });
+        
+        salvarRelatorios(relatoriosLocais);
+        
+        esconderLoading();
+        syncInProgress = false;
+        
+        if (novos > 0) {
+            mostrarMensagemSucesso(`${novos} novos relatórios baixados da nuvem!`);
+        } else {
+            mostrarMensagemSucesso('Dados já estão atualizados!');
+        }
+        
+        // Atualizar histórico se estiver aberto
+        if (document.getElementById('page-historico').classList.contains('active')) {
+            carregarHistorico();
+        }
+        
+    } catch (error) {
+        esconderLoading();
+        syncInProgress = false;
+        console.error('Erro ao baixar:', error);
+        
+        if (error.name === 'AbortError') {
+            alert('Tempo esgotado. O servidor pode estar iniciando (Render gratuito). Aguarde 1 minuto e tente novamente.');
+        } else {
+            alert('Erro ao baixar: ' + error.message);
+        }
+    }
+}
+
+// Sincronização automática semanal
+function verificarSincronizacaoAutomatica() {
+    if (!isLoggedIn() || !isOnline) {
+        return;
+    }
+    
+    const ultimaSync = localStorage.getItem(SYNC_KEY);
+    if (!ultimaSync) {
+        return;
+    }
+    
+    const dataUltimaSync = new Date(ultimaSync);
+    const agora = new Date();
+    const diasPassados = (agora - dataUltimaSync) / (1000 * 60 * 60 * 24);
+    
+    // Se passou mais de 7 dias, sincronizar automaticamente
+    if (diasPassados >= 7) {
+        console.log('⏰ Sincronização automática semanal');
+        sincronizarParaNuvem();
+    }
+}
+
+// Verificar sincronização ao carregar
+window.addEventListener('load', () => {
+    setTimeout(() => {
+        verificarSincronizacaoAutomatica();
+    }, 5000); // Aguardar 5 segundos após carregar
+});
+
+// Atualizar UI de autenticação
+function atualizarUIAuth() {
+    const authSection = document.getElementById('authSection');
+    const syncSection = document.getElementById('syncSection');
+    const userEmail = document.getElementById('userEmail');
+    const lastSyncEl = document.getElementById('lastSync');
+    
+    if (isLoggedIn()) {
+        authSection.style.display = 'none';
+        syncSection.style.display = 'block';
+        userEmail.textContent = getUserEmail();
+        
+        const ultimaSync = localStorage.getItem(SYNC_KEY);
+        if (ultimaSync) {
+            const data = new Date(ultimaSync);
+            lastSyncEl.textContent = data.toLocaleDateString('pt-BR') + ' às ' + data.toLocaleTimeString('pt-BR');
+        } else {
+            lastSyncEl.textContent = 'Nunca';
+        }
+    } else {
+        authSection.style.display = 'block';
+        syncSection.style.display = 'none';
+    }
+}
+
+// Atualizar página de sincronização
+function atualizarPaginaSync() {
+    atualizarUIAuth();
+    atualizarStatusConexao();
+}
+
+// Mostrar formulário de registro
+function mostrarFormRegistro() {
+    document.getElementById('loginForm').style.display = 'none';
+    document.getElementById('registerForm').style.display = 'block';
+}
+
+// Mostrar formulário de login
+function mostrarFormLogin() {
+    document.getElementById('registerForm').style.display = 'none';
+    document.getElementById('loginForm').style.display = 'block';
+}
+
+// Processar registro
+async function processarRegistro(event) {
+    event.preventDefault();
+    
+    const email = document.getElementById('registerEmail').value;
+    const password = document.getElementById('registerPassword').value;
+    const confirmPassword = document.getElementById('confirmPassword').value;
+    
+    if (password !== confirmPassword) {
+        alert('As senhas não coincidem!');
+        return;
+    }
+    
+    if (password.length < 6) {
+        alert('A senha deve ter no mínimo 6 caracteres!');
+        return;
+    }
+    
+    try {
+        await registrarUsuario(email, password);
+        mostrarMensagemSucesso('Conta criada com sucesso!');
+        document.getElementById('registerForm').reset();
+        atualizarUIAuth();
+        
+        // Perguntar se quer sincronizar dados existentes
+        if (carregarRelatorios().length > 0) {
+            if (confirm('Você tem relatórios salvos localmente. Deseja enviá-los para a nuvem agora?')) {
+                await sincronizarParaNuvem();
+            }
+        }
+    } catch (error) {
+        alert('Erro ao criar conta: ' + error.message);
+    }
+}
+
+// Processar login
+async function processarLogin(event) {
+    event.preventDefault();
+    
+    const email = document.getElementById('loginEmail').value;
+    const password = document.getElementById('loginPassword').value;
+    
+    try {
+        await fazerLogin(email, password);
+        mostrarMensagemSucesso('Login realizado com sucesso!');
+        document.getElementById('loginForm').reset();
+        atualizarUIAuth();
+        
+        // Perguntar se quer baixar dados da nuvem
+        if (confirm('Deseja baixar seus relatórios salvos na nuvem?')) {
+            await baixarDaNuvem();
+        }
+    } catch (error) {
+        alert('Erro ao fazer login: ' + error.message);
+    }
+}
+
+// Loading indicator
+function mostrarLoading(mensagem = 'Carregando...') {
+    let loading = document.getElementById('loadingOverlay');
+    if (!loading) {
+        loading = document.createElement('div');
+        loading.id = 'loadingOverlay';
+        loading.className = 'loading-overlay';
+        loading.innerHTML = `
+            <div class="loading-content">
+                <i class="fas fa-circle-notch fa-spin"></i>
+                <p id="loadingMessage">${mensagem}</p>
+            </div>
+        `;
+        document.body.appendChild(loading);
+    } else {
+        document.getElementById('loadingMessage').textContent = mensagem;
+        loading.style.display = 'flex';
+    }
+}
+
+function esconderLoading() {
+    const loading = document.getElementById('loadingOverlay');
+    if (loading) {
+        loading.style.display = 'none';
     }
 }
 
