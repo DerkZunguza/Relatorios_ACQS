@@ -510,6 +510,28 @@
             font-weight: bold;
         }
         
+        .edit-mode-banner {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            border-radius: 8px;
+            padding: 10px 15px;
+            margin-top: 15px;
+        }
+        
+        .edit-mode-banner i {
+            color: #ff9800;
+            font-size: 1.2rem;
+        }
+        
+        .edit-mode-banner span {
+            flex: 1;
+            font-weight: bold;
+            color: #856404;
+        }
+        
         @media (max-width: 768px) {
             body {
                 padding: 10px;
@@ -585,6 +607,10 @@
 
             <form id="relatorioForm">
                 <h2>Dados gerais</h2>
+                
+                <label>Data do relatório:</label>
+                <input type="date" id="dataRelatorio" required>
+                
                 <label>Nome da célula:</label>
                 <input type="text" id="nomeCelula" placeholder="Ex: Unizambeze">
                 

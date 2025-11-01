@@ -5,7 +5,7 @@ const EMAIL_KEY = 'acqs_user_email';
 const SYNC_KEY = 'acqs_last_sync';
 
 // Configuração da API
-const API_URL = 'https://relatorios-acqs-backend.onrender.com'; // ALTERAR APÓS DEPLOY
+const API_URL = 'https://relatorios-acqs-backend.onrender.com';
 const API_TIMEOUT = 60000; // 60 segundos (para cold start do Render)
 
 // Estado da conexão
@@ -558,6 +558,9 @@ function preencherFormulario(dados) {
     document.getElementById('participantes').value = dados.participantes || '0';
 }
 
+// Variável para controlar edição
+let relatorioEmEdicao = null;
+
 // Salvar relatório atual
 function salvarRelatorioAtual() {
     const dados = obterDadosFormulario();
@@ -567,18 +570,57 @@ function salvarRelatorioAtual() {
         return;
     }
     
-    const dataAtual = new Date();
+    // Obter data selecionada ou usar data atual
+    const dataInput = document.getElementById('dataRelatorio').value;
+    let dataRelatorio;
     
+    if (dataInput) {
+        dataRelatorio = new Date(dataInput + 'T12:00:00'); // Meio-dia para evitar problemas de timezone
+    } else {
+        dataRelatorio = new Date();
+        // Preencher o campo com a data atual
+        document.getElementById('dataRelatorio').valueAsDate = dataRelatorio;
+    }
+    
+    const relatorios = carregarRelatorios();
+    
+    // Verificar se está editando um relatório existente
+    if (relatorioEmEdicao !== null) {
+        // ATUALIZAR relatório existente
+        const index = relatorios.findIndex(r => r.id === relatorioEmEdicao);
+        
+        if (index !== -1) {
+            // Manter o ID original e data de criação
+            relatorios[index] = {
+                id: relatorioEmEdicao,
+                data: dataRelatorio.toISOString(),
+                dataFormatada: dataRelatorio.toLocaleDateString('pt-BR'),
+                mes: dataRelatorio.getMonth() + 1,
+                ano: dataRelatorio.getFullYear(),
+                dados: dados
+            };
+            
+            salvarRelatorios(relatorios);
+            mostrarMensagemSucesso('Relatório atualizado com sucesso!');
+            
+            // Limpar modo de edição
+            relatorioEmEdicao = null;
+            document.getElementById('editMode').style.display = 'none';
+            
+            return;
+        }
+    }
+    
+    // CRIAR novo relatório
     const relatorio = {
         id: Date.now(),
-        data: dataAtual.toISOString(),
-        dataFormatada: dataAtual.toLocaleDateString('pt-BR'),
-        mes: dataAtual.getMonth() + 1,
-        ano: dataAtual.getFullYear(),
+        data: dataRelatorio.toISOString(),
+        dataFormatada: dataRelatorio.toLocaleDateString('pt-BR'),
+        mes: dataRelatorio.getMonth() + 1,
+        ano: dataRelatorio.getFullYear(),
         dados: dados
     };
     
-    const relatorios = carregarRelatorios();
     relatorios.push(relatorio);
     salvarRelatorios(relatorios);
     
@@ -587,7 +629,16 @@ function salvarRelatorioAtual() {
 }
 
 function gerarTextoRelatorio() {
-    const data = new Date().toLocaleDateString('pt-BR');
+    // Usar data selecionada no formulário ou data atual
+    const dataInput = document.getElementById('dataRelatorio').value;
+    let data;
+    
+    if (dataInput) {
+        const dataObj = new Date(dataInput + 'T12:00:00');
+        data = dataObj.toLocaleDateString('pt-BR');
+    } else {
+        data = new Date().toLocaleDateString('pt-BR');
+    }
     
     // Processar intercessores (COM numeração)
     const intercessoresRaw = document.getElementById('intercessores').value;
@@ -854,10 +905,49 @@ function carregarRelatorio(id) {
         return;
     }
     
+    // Ativar modo de edição
+    relatorioEmEdicao = relatorio.id;
+    
+    // Preencher data do relatório
+    const data = new Date(relatorio.data);
+    const dataStr = data.toISOString().split('T')[0];
+    document.getElementById('dataRelatorio').value = dataStr;
+    
+    // Preencher formulário
     preencherFormulario(relatorio.dados);
+    
+    // Mostrar indicador de edição
+    let editMode = document.getElementById('editMode');
+    if (!editMode) {
+        editMode = document.createElement('div');
+        editMode.id = 'editMode';
+        editMode.className = 'edit-mode-banner';
+        editMode.innerHTML = `
+            <i class="fas fa-edit"></i>
+            <span>Editando relatório de ${relatorio.dataFormatada}</span>
+            <button onclick="cancelarEdicao()" class="btn-secundario" style="margin: 0; padding: 5px 10px;">
+                <i class="fas fa-times"></i> Cancelar
+            </button>
+        `;
+        document.querySelector('.toolbar').appendChild(editMode);
+    } else {
+        editMode.style.display = 'flex';
+        editMode.querySelector('span').textContent = `Editando relatório de ${relatorio.dataFormatada}`;
+    }
+    
     mostrarPagina('form');
     mostrarMensagemSucesso('Relatório carregado para edição!');
     window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// Cancelar edição
+function cancelarEdicao() {
+    if (confirm('Deseja cancelar a edição? As alterações não salvas serão perdidas.')) {
+        relatorioEmEdicao = null;
+        document.getElementById('editMode').style.display = 'none';
+        limparFormulario();
+        mostrarMensagemSucesso('Edição cancelada');
+    }
 }
 
 function excluirRelatorio(id) {
@@ -876,6 +966,17 @@ function excluirRelatorio(id) {
 function limparFormulario() {
     if (confirm('Tem certeza que deseja limpar todos os campos?')) {
         document.getElementById('relatorioForm').reset();
+        
+        // Resetar data para hoje
+        document.getElementById('dataRelatorio').valueAsDate = new Date();
+        
+        // Cancelar modo de edição
+        relatorioEmEdicao = null;
+        const editMode = document.getElementById('editMode');
+        if (editMode) {
+            editMode.style.display = 'none';
+        }
+        
         mostrarMensagemSucesso('Formulário limpo!');
     }
 }
@@ -1012,6 +1113,16 @@ if ('serviceWorker' in navigator) {
             .catch(err => console.log('Erro ao registrar Service Worker:', err));
     });
 }
+
+// Inicializar data ao carregar a página
+window.addEventListener('DOMContentLoaded', () => {
+    // Definir data atual como padrão
+    const hoje = new Date();
+    document.getElementById('dataRelatorio').valueAsDate = hoje;
+    
+    // Atualizar status de conexão
+    atualizarStatusConexao();
+});
 
 // PWA Install Prompt
 let deferredPrompt;
