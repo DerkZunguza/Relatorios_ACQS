@@ -5,7 +5,7 @@ const EMAIL_KEY = 'acqs_user_email';
 const SYNC_KEY = 'acqs_last_sync';
 
 // Configuração da API
-const API_URL = 'https://seu-backend.onrender.com'; // ALTERAR APÓS DEPLOY
+const API_URL = 'https://relatorios-acqs-backend.onrender.com'; // ALTERAR APÓS DEPLOY
 const API_TIMEOUT = 60000; // 60 segundos (para cold start do Render)
 
 // Estado da conexão
