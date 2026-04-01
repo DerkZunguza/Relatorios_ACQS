@@ -5,8 +5,8 @@ const EMAIL_KEY = 'acqs_user_email';
 const SYNC_KEY = 'acqs_last_sync';
 
 // Configuração da API
-const API_URL = 'https://relatorios-acqs-backend.onrender.com';
-const API_TIMEOUT = 60000; // 60 segundos (para cold start do Render)
+const API_URL = 'https://acsqsrelatoriosapi.eurekaplatformapi.xyz';
+const API_TIMEOUT = 10000; // 10 segundos
 
 // Estado da conexão
 let isOnline = navigator.onLine;
