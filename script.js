@@ -1,596 +1,610 @@
-// Sistema de armazenamento local
-const STORAGE_KEY = 'relatorios_celula';
-const USER_ID_KEY = 'acqs_user_id';
-const EMAIL_KEY = 'acqs_user_email';
-const ROLE_KEY = 'acqs_user_role';
-const SYNC_KEY = 'acqs_last_sync';
-
+// ==================== CONFIGURAÇÃO ====================
 const API_URL = 'https://acsqsrelatoriosapi.eurekaplatformapi.xyz';
-const API_TIMEOUT = 10000;
+const API_TIMEOUT = 15000;
+const STORAGE_KEY = 'acqs_relatorios';
+const USER_KEY = 'acqs_user';
+const SYNC_KEY = 'acqs_sync';
 
+// ==================== ESTADO ====================
 let isOnline = navigator.onLine;
-let syncInProgress = false;
+let syncBusy = false;
+let editandoId = null;
 
-window.addEventListener('online', () => { isOnline = true; atualizarStatusConexao(); });
-window.addEventListener('offline', () => { isOnline = false; atualizarStatusConexao(); });
+window.addEventListener('online', () => { isOnline = true; atualizarOnline(); });
+window.addEventListener('offline', () => { isOnline = false; atualizarOnline(); });
 
-function atualizarStatusConexao() {
-    const indicator = document.getElementById('onlineIndicator');
-    if (indicator) {
-        indicator.className = isOnline ? 'online-indicator online' : 'online-indicator offline';
-        indicator.title = isOnline ? 'Online' : 'Offline';
-    }
+// ==================== SESSÃO ====================
+function getUser() {
+    const u = localStorage.getItem(USER_KEY);
+    return u ? JSON.parse(u) : null;
 }
 
-function getUserId() { return localStorage.getItem(USER_ID_KEY); }
-function setUserId(id) { localStorage.setItem(USER_ID_KEY, id); }
-function getUserEmail() { return localStorage.getItem(EMAIL_KEY); }
-function setUserEmail(email) { localStorage.setItem(EMAIL_KEY, email); }
-function getUserRole() { return localStorage.getItem(ROLE_KEY); }
-function setUserRole(role) { localStorage.setItem(ROLE_KEY, role); }
-function removeSession() {
-    localStorage.removeItem(USER_ID_KEY);
-    localStorage.removeItem(EMAIL_KEY);
-    localStorage.removeItem(ROLE_KEY);
+function setUser(u) {
+    localStorage.setItem(USER_KEY, JSON.stringify(u));
 }
-function isLoggedIn() { return !!getUserId(); }
 
-async function fetchWithTimeout(url, options = {}, timeout = API_TIMEOUT) {
+function removeUser() {
+    localStorage.removeItem(USER_KEY);
+}
+
+function logado() {
+    return !!getUser();
+}
+
+// ==================== FETCH ====================
+async function api(endpoint, method = 'GET', body = null) {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    const tid = setTimeout(() => controller.abort(), API_TIMEOUT);
     try {
-        const response = await fetch(url, { ...options, signal: controller.signal });
-        clearTimeout(timeoutId);
-        return response;
-    } catch (error) {
-        clearTimeout(timeoutId);
-        throw error;
+        const opts = {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            signal: controller.signal
+        };
+        if (body) opts.body = JSON.stringify(body);
+        const res = await fetch(`${API_URL}${endpoint}`, opts);
+        clearTimeout(tid);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.erro || data.error || 'Erro desconhecido');
+        return data;
+    } catch (e) {
+        clearTimeout(tid);
+        if (e.name === 'AbortError') throw new Error('Tempo esgotado. Verifique a ligação.');
+        throw e;
     }
 }
 
-async function registrarUsuario(email, password) {
-    if (!isOnline) throw new Error('Sem conexão com a internet');
+// ==================== AUTH ====================
+async function fazerCadastro() {
+    const email = document.getElementById('cadastroEmail').value.trim();
+    const password = document.getElementById('cadastroPassword').value;
+    const confirm = document.getElementById('cadastroConfirm').value;
+
+    if (!email || !password) { alert('Preencha email e senha.'); return; }
+    if (password !== confirm) { alert('As senhas não coincidem.'); return; }
+    if (password.length < 6) { alert('Senha deve ter no mínimo 6 caracteres.'); return; }
+
     mostrarLoading('Criando conta...');
     try {
-        const response = await fetchWithTimeout(`${API_URL}/api/cadastrar`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password })
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.erro || data.error || 'Erro ao criar conta');
-        setUserId(data.userId);
-        setUserEmail(data.email);
-        setUserRole(data.role);
+        const data = await api('/api/cadastrar', 'POST', { email, password });
+        setUser({ userId: data.userId, email: data.email, role: data.role });
         esconderLoading();
-        return data;
-    } catch (error) {
+        toast('Conta criada com sucesso!');
+        document.getElementById('cadastroEmail').value = '';
+        document.getElementById('cadastroPassword').value = '';
+        document.getElementById('cadastroConfirm').value = '';
+        atualizarUISync();
+        const rels = carregarRelatorios();
+        if (rels.length > 0 && confirm('Tem relatórios locais. Enviar para a nuvem agora?')) {
+            await enviarNuvem();
+        }
+    } catch (e) {
         esconderLoading();
-        if (error.name === 'AbortError') throw new Error('Tempo esgotado. Tente novamente.');
-        throw error;
+        alert('Erro ao criar conta: ' + e.message);
     }
 }
 
-async function fazerLogin(email, password) {
-    if (!isOnline) throw new Error('Sem conexão com a internet');
+async function fazerLogin() {
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+
+    if (!email || !password) { alert('Preencha email e senha.'); return; }
+
     mostrarLoading('Fazendo login...');
     try {
-        const response = await fetchWithTimeout(`${API_URL}/api/entrar`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password })
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.erro || data.error || 'Erro ao fazer login');
-        setUserId(data.userId);
-        setUserEmail(data.email);
-        setUserRole(data.role);
+        const data = await api('/api/entrar', 'POST', { email, password });
+        setUser({ userId: data.userId, email: data.email, role: data.role });
         esconderLoading();
-        return data;
-    } catch (error) {
+        toast('Login realizado com sucesso!');
+        document.getElementById('loginEmail').value = '';
+        document.getElementById('loginPassword').value = '';
+        atualizarUISync();
+        if (confirm('Deseja baixar os relatórios da nuvem?')) {
+            await baixarNuvem();
+        }
+    } catch (e) {
         esconderLoading();
-        if (error.name === 'AbortError') throw new Error('Tempo esgotado. Tente novamente.');
-        throw error;
+        alert('Erro ao fazer login: ' + e.message);
     }
 }
 
 function fazerLogout() {
-    if (confirm('Tem certeza que deseja sair? Os dados locais serão mantidos.')) {
-        removeSession();
-        atualizarUIAuth();
-        mostrarMensagemSucesso('Logout realizado com sucesso!');
-    }
+    if (!confirm('Tem certeza que deseja sair? Os dados locais serão mantidos.')) return;
+    removeUser();
+    atualizarUISync();
+    toast('Logout realizado.');
 }
 
-function mostrarPagina(pagina) {
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-    if (pagina === 'form') {
-        document.getElementById('page-form').classList.add('active');
-        document.querySelector('.nav-item:nth-child(1)').classList.add('active');
-    } else if (pagina === 'historico') {
-        document.getElementById('page-historico').classList.add('active');
-        document.querySelector('.nav-item:nth-child(2)').classList.add('active');
-        carregarHistorico();
-    } else if (pagina === 'stats') {
-        document.getElementById('page-stats').classList.add('active');
-        document.querySelector('.nav-item:nth-child(3)').classList.add('active');
-        carregarEstatisticas();
-    } else if (pagina === 'sync') {
-        document.getElementById('page-sync').classList.add('active');
-        document.querySelector('.nav-item:nth-child(4)').classList.add('active');
-        atualizarPaginaSync();
-    }
+function mostrarCadastro() {
+    document.getElementById('loginBox').style.display = 'none';
+    document.getElementById('cadastroBox').style.display = 'block';
 }
 
-async function sincronizarParaNuvem() {
-    if (!isOnline) { alert('Sem conexão com a internet.'); return; }
-    if (!isLoggedIn()) { alert('Você precisa fazer login primeiro!'); mostrarPagina('sync'); return; }
-    if (syncInProgress) return;
-    syncInProgress = true;
-    mostrarLoading('Sincronizando com a nuvem...');
+function mostrarLogin() {
+    document.getElementById('cadastroBox').style.display = 'none';
+    document.getElementById('loginBox').style.display = 'block';
+}
+
+// ==================== SINCRONIZAÇÃO ====================
+async function enviarNuvem() {
+    if (!isOnline) { alert('Sem ligação à internet.'); return; }
+    if (!logado()) { alert('Precisa fazer login primeiro.'); return; }
+    if (syncBusy) return;
+    syncBusy = true;
+    mostrarLoading('Enviando para a nuvem...');
     try {
+        const user = getUser();
         const relatorios = carregarRelatorios();
-        const response = await fetchWithTimeout(`${API_URL}/api/sync/upload`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: getUserId(), relatorios })
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Erro ao sincronizar');
+        const data = await api('/api/sync/upload', 'POST', { userId: user.userId, relatorios });
         localStorage.setItem(SYNC_KEY, new Date().toISOString());
         esconderLoading();
-        syncInProgress = false;
-        mostrarMensagemSucesso(`Sincronizado! ${data.total} relatórios na nuvem.`);
-        atualizarUIAuth();
-    } catch (error) {
+        syncBusy = false;
+        toast(`${data.total} relatórios sincronizados!`);
+        atualizarUISync();
+    } catch (e) {
         esconderLoading();
-        syncInProgress = false;
-        alert('Erro ao sincronizar: ' + error.message);
+        syncBusy = false;
+        alert('Erro ao enviar: ' + e.message);
     }
 }
 
-async function baixarDaNuvem() {
-    if (!isOnline) { alert('Sem conexão com a internet.'); return; }
-    if (!isLoggedIn()) { alert('Você precisa fazer login primeiro!'); return; }
-    if (syncInProgress) return;
-    syncInProgress = true;
-    mostrarLoading('Baixando dados da nuvem...');
+async function baixarNuvem() {
+    if (!isOnline) { alert('Sem ligação à internet.'); return; }
+    if (!logado()) { alert('Precisa fazer login primeiro.'); return; }
+    if (syncBusy) return;
+    syncBusy = true;
+    mostrarLoading('Baixando da nuvem...');
     try {
-        const response = await fetchWithTimeout(`${API_URL}/api/sync/download?userId=${getUserId()}`, { method: 'GET' });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Erro ao baixar dados');
-        if (data.relatorios.length === 0) {
-            esconderLoading(); syncInProgress = false;
+        const user = getUser();
+        const data = await api(`/api/sync/download?userId=${user.userId}`);
+        if (!data.relatorios || data.relatorios.length === 0) {
+            esconderLoading(); syncBusy = false;
             alert('Nenhum dado encontrado na nuvem.'); return;
         }
-        const relatoriosLocais = carregarRelatorios();
-        const idsLocais = new Set(relatoriosLocais.map(r => r.id));
+        const locais = carregarRelatorios();
+        const ids = new Set(locais.map(r => r.id));
         let novos = 0;
-        data.relatorios.forEach(r => { if (!idsLocais.has(r.id)) { relatoriosLocais.push(r); novos++; } });
-        salvarRelatorios(relatoriosLocais);
-        esconderLoading(); syncInProgress = false;
-        mostrarMensagemSucesso(novos > 0 ? `${novos} novos relatórios baixados!` : 'Dados já estão atualizados!');
-        if (document.getElementById('page-historico').classList.contains('active')) carregarHistorico();
-    } catch (error) {
-        esconderLoading(); syncInProgress = false;
-        alert('Erro ao baixar: ' + error.message);
+        data.relatorios.forEach(r => { if (!ids.has(r.id)) { locais.push(r); novos++; } });
+        salvarRelatorios(locais);
+        esconderLoading(); syncBusy = false;
+        toast(novos > 0 ? `${novos} novos relatórios baixados!` : 'Dados já actualizados!');
+    } catch (e) {
+        esconderLoading(); syncBusy = false;
+        alert('Erro ao baixar: ' + e.message);
     }
 }
 
-function verificarSincronizacaoAutomatica() {
-    if (!isLoggedIn() || !isOnline) return;
-    const ultimaSync = localStorage.getItem(SYNC_KEY);
-    if (!ultimaSync) return;
-    const diasPassados = (new Date() - new Date(ultimaSync)) / (1000 * 60 * 60 * 24);
-    if (diasPassados >= 7) sincronizarParaNuvem();
-}
-
-window.addEventListener('load', () => { setTimeout(() => verificarSincronizacaoAutomatica(), 5000); });
-
-function atualizarUIAuth() {
-    const authSection = document.getElementById('authSection');
-    const syncSection = document.getElementById('syncSection');
-    const userEmailEl = document.getElementById('userEmail');
-    const lastSyncEl = document.getElementById('lastSync');
-    if (isLoggedIn()) {
-        authSection.style.display = 'none';
-        syncSection.style.display = 'block';
-        userEmailEl.textContent = getUserEmail();
-        const ultimaSync = localStorage.getItem(SYNC_KEY);
-        if (ultimaSync) {
-            const d = new Date(ultimaSync);
-            lastSyncEl.textContent = d.toLocaleDateString('pt-BR') + ' às ' + d.toLocaleTimeString('pt-BR');
-        } else { lastSyncEl.textContent = 'Nunca'; }
-    } else {
-        authSection.style.display = 'block';
-        syncSection.style.display = 'none';
-    }
-}
-
-function atualizarPaginaSync() { atualizarUIAuth(); atualizarStatusConexao(); }
-
-function mostrarFormRegistro() {
-    document.getElementById('loginFormWrapper').style.display = 'none';
-    document.getElementById('registerFormWrapper').style.display = 'block';
-}
-
-function mostrarFormLogin() {
-    document.getElementById('registerFormWrapper').style.display = 'none';
-    document.getElementById('loginFormWrapper').style.display = 'block';
-}
-
-async function processarRegistro(event) {
-    event.preventDefault();
-    const email = document.getElementById('registerEmail').value;
-    const password = document.getElementById('registerPassword').value;
-    const confirmPassword = document.getElementById('confirmPassword').value;
-    if (password !== confirmPassword) { alert('As senhas não coincidem!'); return; }
-    if (password.length < 6) { alert('A senha deve ter no mínimo 6 caracteres!'); return; }
-    try {
-        await registrarUsuario(email, password);
-        mostrarMensagemSucesso('Conta criada com sucesso!');
-        document.getElementById('registerEmail').value = '';
-        document.getElementById('registerPassword').value = '';
-        document.getElementById('confirmPassword').value = '';
-        atualizarUIAuth();
-        if (carregarRelatorios().length > 0) {
-            if (confirm('Você tem relatórios salvos localmente. Deseja enviá-los para a nuvem agora?')) {
-                await sincronizarParaNuvem();
-            }
-        }
-    } catch (error) { alert('Erro ao criar conta: ' + error.message); }
-}
-
-async function processarLogin(event) {
-    event.preventDefault();
-    const email = document.getElementById('loginEmail').value;
-    const password = document.getElementById('loginPassword').value;
-    try {
-        await fazerLogin(email, password);
-        mostrarMensagemSucesso('Login realizado com sucesso!');
-        document.getElementById('loginEmail').value = '';
-        document.getElementById('loginPassword').value = '';
-        atualizarUIAuth();
-        if (confirm('Deseja baixar seus relatórios salvos na nuvem?')) { await baixarDaNuvem(); }
-    } catch (error) { alert('Erro ao fazer login: ' + error.message); }
-}
-
-function mostrarLoading(mensagem = 'Carregando...') {
-    let loading = document.getElementById('loadingOverlay');
-    if (!loading) {
-        loading = document.createElement('div');
-        loading.id = 'loadingOverlay';
-        loading.className = 'loading-overlay';
-        loading.innerHTML = `<div class="loading-content"><i class="fas fa-circle-notch fa-spin"></i><p id="loadingMessage">${mensagem}</p></div>`;
-        document.body.appendChild(loading);
-    } else {
-        document.getElementById('loadingMessage').textContent = mensagem;
-        loading.style.display = 'flex';
-    }
-}
-
-function esconderLoading() {
-    const loading = document.getElementById('loadingOverlay');
-    if (loading) loading.style.display = 'none';
-}
-
+// ==================== RELATÓRIOS ====================
 function carregarRelatorios() {
-    const dados = localStorage.getItem(STORAGE_KEY);
-    return dados ? JSON.parse(dados) : [];
+    const d = localStorage.getItem(STORAGE_KEY);
+    return d ? JSON.parse(d) : [];
 }
 
-function salvarRelatorios(relatorios) { localStorage.setItem(STORAGE_KEY, JSON.stringify(relatorios)); }
+function salvarRelatorios(lista) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(lista));
+}
 
-function obterDadosFormulario() {
+function lerForm() {
     return {
-        nomeCelula: document.getElementById('nomeCelula').value,
-        localCulto: document.getElementById('localCulto').value,
-        cultoInicio: document.getElementById('cultoInicio').value,
-        cultoFim: document.getElementById('cultoFim').value,
-        moderador: document.getElementById('moderador').value,
-        intercessores: document.getElementById('intercessores').value,
-        intercessaoInicio: document.getElementById('intercessaoInicio').value,
-        intercessaoFim: document.getElementById('intercessaoFim').value,
-        pontosOracao: document.getElementById('pontosOracao').value,
-        pregadorEvangelista: document.getElementById('pregadorEvangelista').value,
-        pregadorPrincipal: document.getElementById('pregadorPrincipal').value,
-        temaPregacao: document.getElementById('temaPregacao').value,
-        notasPregacao: document.getElementById('notasPregacao').value,
-        listaPresencas: document.getElementById('listaPresencas').value,
-        primeiraVez: parseInt(document.getElementById('primeiraVez').value) || 0,
-        receberamJesus: parseInt(document.getElementById('receberamJesus').value) || 0,
-        batizados: parseInt(document.getElementById('batizados').value) || 0,
-        participantes: parseInt(document.getElementById('participantes').value) || 0
+        nomeCelula: v('nomeCelula'),
+        localCulto: v('localCulto'),
+        cultoInicio: v('cultoInicio'),
+        cultoFim: v('cultoFim'),
+        moderador: v('moderador'),
+        intercessores: v('intercessores'),
+        intercessaoInicio: v('intercessaoInicio'),
+        intercessaoFim: v('intercessaoFim'),
+        pontosOracao: v('pontosOracao'),
+        pregadorEvangelista: v('pregadorEvangelista'),
+        pregadorPrincipal: v('pregadorPrincipal'),
+        temaPregacao: v('temaPregacao'),
+        notasPregacao: v('notasPregacao'),
+        listaPresencas: v('listaPresencas'),
+        primeiraVez: parseInt(v('primeiraVez')) || 0,
+        receberamJesus: parseInt(v('receberamJesus')) || 0,
+        batizados: parseInt(v('batizados')) || 0,
+        participantes: parseInt(v('participantes')) || 0
     };
 }
 
-function preencherFormulario(dados) {
-    document.getElementById('nomeCelula').value = dados.nomeCelula || '';
-    document.getElementById('localCulto').value = dados.localCulto || '';
-    document.getElementById('cultoInicio').value = dados.cultoInicio || '';
-    document.getElementById('cultoFim').value = dados.cultoFim || '';
-    document.getElementById('moderador').value = dados.moderador || '';
-    document.getElementById('intercessores').value = dados.intercessores || '';
-    document.getElementById('intercessaoInicio').value = dados.intercessaoInicio || '';
-    document.getElementById('intercessaoFim').value = dados.intercessaoFim || '';
-    document.getElementById('pontosOracao').value = dados.pontosOracao || '';
-    document.getElementById('pregadorEvangelista').value = dados.pregadorEvangelista || '';
-    document.getElementById('pregadorPrincipal').value = dados.pregadorPrincipal || '';
-    document.getElementById('temaPregacao').value = dados.temaPregacao || '';
-    document.getElementById('notasPregacao').value = dados.notasPregacao || '';
-    document.getElementById('listaPresencas').value = dados.listaPresencas || '';
-    document.getElementById('primeiraVez').value = dados.primeiraVez || '0';
-    document.getElementById('receberamJesus').value = dados.receberamJesus || '0';
-    document.getElementById('batizados').value = dados.batizados || '0';
-    document.getElementById('participantes').value = dados.participantes || '0';
+function preencherForm(d) {
+    sv('nomeCelula', d.nomeCelula);
+    sv('localCulto', d.localCulto);
+    sv('cultoInicio', d.cultoInicio);
+    sv('cultoFim', d.cultoFim);
+    sv('moderador', d.moderador);
+    sv('intercessores', d.intercessores);
+    sv('intercessaoInicio', d.intercessaoInicio);
+    sv('intercessaoFim', d.intercessaoFim);
+    sv('pontosOracao', d.pontosOracao);
+    sv('pregadorEvangelista', d.pregadorEvangelista);
+    sv('pregadorPrincipal', d.pregadorPrincipal);
+    sv('temaPregacao', d.temaPregacao);
+    sv('notasPregacao', d.notasPregacao);
+    sv('listaPresencas', d.listaPresencas);
+    sv('primeiraVez', d.primeiraVez || 0);
+    sv('receberamJesus', d.receberamJesus || 0);
+    sv('batizados', d.batizados || 0);
+    sv('participantes', d.participantes || 0);
 }
 
-let relatorioEmEdicao = null;
+function salvarRelatorio() {
+    const dados = lerForm();
+    if (!dados.nomeCelula.trim()) { alert('Preencha o nome da célula.'); return; }
 
-function salvarRelatorioAtual() {
-    const dados = obterDadosFormulario();
-    if (!dados.nomeCelula.trim()) { alert('Por favor, preencha o nome da célula antes de salvar.'); return; }
-    const dataInput = document.getElementById('dataRelatorio').value;
-    let dataRelatorio;
-    if (dataInput) { dataRelatorio = new Date(dataInput + 'T12:00:00'); }
-    else { dataRelatorio = new Date(); document.getElementById('dataRelatorio').valueAsDate = dataRelatorio; }
-    const relatorios = carregarRelatorios();
-    if (relatorioEmEdicao !== null) {
-        const index = relatorios.findIndex(r => r.id === relatorioEmEdicao);
-        if (index !== -1) {
-            relatorios[index] = { id: relatorioEmEdicao, data: dataRelatorio.toISOString(), dataFormatada: dataRelatorio.toLocaleDateString('pt-BR'), mes: dataRelatorio.getMonth() + 1, ano: dataRelatorio.getFullYear(), dados };
-            salvarRelatorios(relatorios);
-            mostrarMensagemSucesso('Relatório atualizado com sucesso!');
-            relatorioEmEdicao = null;
-            document.getElementById('editMode').style.display = 'none';
+    const dataInput = v('dataRelatorio');
+    const dataObj = dataInput ? new Date(dataInput + 'T12:00:00') : new Date();
+    if (!dataInput) document.getElementById('dataRelatorio').valueAsDate = new Date();
+
+    const lista = carregarRelatorios();
+
+    if (editandoId !== null) {
+        const idx = lista.findIndex(r => r.id === editandoId);
+        if (idx !== -1) {
+            lista[idx] = { id: editandoId, data: dataObj.toISOString(), dataFormatada: dataObj.toLocaleDateString('pt-BR'), mes: dataObj.getMonth() + 1, ano: dataObj.getFullYear(), dados };
+            salvarRelatorios(lista);
+            toast('Relatório actualizado!');
+            editandoId = null;
+            document.getElementById('editBanner').style.display = 'none';
             return;
         }
     }
-    const relatorio = { id: Date.now(), data: dataRelatorio.toISOString(), dataFormatada: dataRelatorio.toLocaleDateString('pt-BR'), mes: dataRelatorio.getMonth() + 1, ano: dataRelatorio.getFullYear(), dados };
-    relatorios.push(relatorio);
-    salvarRelatorios(relatorios);
-    mostrarMensagemSucesso('Relatório salvo com sucesso!');
-    return relatorio;
+
+    const novo = { id: Date.now(), data: dataObj.toISOString(), dataFormatada: dataObj.toLocaleDateString('pt-BR'), mes: dataObj.getMonth() + 1, ano: dataObj.getFullYear(), dados };
+    lista.push(novo);
+    salvarRelatorios(lista);
+    toast('Relatório guardado!');
 }
 
-function gerarTextoRelatorio() {
-    const dataInput = document.getElementById('dataRelatorio').value;
+function editarRelatorio(id) {
+    const r = carregarRelatorios().find(r => r.id === id);
+    if (!r) return;
+    editandoId = r.id;
+    document.getElementById('dataRelatorio').value = new Date(r.data).toISOString().split('T')[0];
+    preencherForm(r.dados);
+    const b = document.getElementById('editBanner');
+    b.style.display = 'flex';
+    document.getElementById('editBannerText').textContent = `Editando: ${r.dataFormatada}`;
+    irPara('form');
+    toast('Relatório carregado para edição!');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function cancelarEdicao() {
+    if (!confirm('Cancelar edição? Alterações não guardadas serão perdidas.')) return;
+    editandoId = null;
+    document.getElementById('editBanner').style.display = 'none';
+    limparForm();
+}
+
+function apagarRelatorio(id) {
+    if (!confirm('Apagar este relatório?')) return;
+    salvarRelatorios(carregarRelatorios().filter(r => r.id !== id));
+    toast('Relatório apagado!');
+    renderHistorico();
+}
+
+function limparForm() {
+    if (!confirm('Limpar todos os campos?')) return;
+    document.getElementById('dataRelatorio').valueAsDate = new Date();
+    ['nomeCelula','localCulto','cultoInicio','cultoFim','moderador','intercessores',
+     'intercessaoInicio','intercessaoFim','pontosOracao','pregadorEvangelista',
+     'pregadorPrincipal','temaPregacao','notasPregacao','listaPresencas'].forEach(id => sv(id, ''));
+    ['primeiraVez','receberamJesus','batizados','participantes'].forEach(id => sv(id, 0));
+    editandoId = null;
+    document.getElementById('editBanner').style.display = 'none';
+    toast('Formulário limpo!');
+}
+
+// ==================== GERAR TEXTO ====================
+function gerarTexto() {
+    const dataInput = v('dataRelatorio');
     const data = dataInput ? new Date(dataInput + 'T12:00:00').toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR');
-    const intercessoresFormatados = document.getElementById('intercessores').value.split('\n').filter(l => l.trim()).map((n, i) => `${i + 1}.${n.trim()}`).join('\n');
-    const presencasFormatadas = document.getElementById('listaPresencas').value.split('\n').filter(l => l.trim()).map(n => n.trim()).join('\n');
-    const pontosFormatados = document.getElementById('pontosOracao').value.split('\n').filter(l => l.trim()).map(p => p.trim()).join('\n');
-    return `Relatório, ACQS Célula ${document.getElementById('nomeCelula').value}
-Data:${data}
+    const intercessores = v('intercessores').split('\n').filter(l => l.trim()).map((n, i) => `${i + 1}. ${n.trim()}`).join('\n');
+    const presencas = v('listaPresencas').split('\n').filter(l => l.trim()).map(n => n.trim()).join('\n');
+    const pontos = v('pontosOracao').split('\n').filter(l => l.trim()).map(p => p.trim()).join('\n');
+
+    return `Relatório ACQS — Célula ${v('nomeCelula')}
+Data: ${data}
 
 Saudações líder!
 
-Intercessão: ${document.getElementById('intercessaoInicio').value}-${document.getElementById('intercessaoFim').value}
-Início do culto: ${document.getElementById('cultoInicio').value}.
-Término: ${document.getElementById('cultoFim').value}
+Intercessão: ${v('intercessaoInicio')} - ${v('intercessaoFim')}
+Início do culto: ${v('cultoInicio')}
+Término: ${v('cultoFim')}
+Moderador: ${v('moderador')}
 
-O culto foi moderado por: ${document.getElementById('moderador').value}
-
-Pontos de Oração:
-
-${pontosFormatados}
-
+PONTOS DE ORAÇÃO
+${pontos}
 
 MOMENTO DE INTERCESSÃO
-Intercessores: 
-${intercessoresFormatados}
-
+Intercessores:
+${intercessores}
 
 MOMENTO DA PALAVRA
-Pregador Evangelistico: ${document.getElementById('pregadorEvangelista').value}
-Pregador Principal: ${document.getElementById('pregadorPrincipal').value}
+Pregador Evangelista: ${v('pregadorEvangelista')}
+Pregador Principal: ${v('pregadorPrincipal')}
+Tema: ${v('temaPregacao')}
+Notas:
+${v('notasPregacao')}
 
-Tema da Pregação: ${document.getElementById('temaPregacao').value}
-Notas da Pregação:
-
-${document.getElementById('notasPregacao').value}
-
-ESTATÍSTICA
-
+ESTATÍSTICAS
 Lista de Presenças:
-
-${presencasFormatadas}
+${presencas}
 
 Resumo:
-- 1ª vez: ${document.getElementById('primeiraVez').value} pessoa(s)
-- Receberam Jesus: ${document.getElementById('receberamJesus').value} pessoa(s)
-- Batizados: ${document.getElementById('batizados').value} pessoa(s)
-- Total de Participantes: ${document.getElementById('participantes').value} pessoa(s)`;
+- 1ª vez: ${v('primeiraVez')} pessoa(s)
+- Receberam Jesus: ${v('receberamJesus')} pessoa(s)
+- Batizados: ${v('batizados')} pessoa(s)
+- Total de participantes: ${v('participantes')} pessoa(s)`;
 }
 
 function gerarPDF() {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
-    const linhas = doc.splitTextToSize(gerarTextoRelatorio(), 180);
-    doc.text(linhas, 15, 15);
-    doc.save(`relatorio_${document.getElementById('nomeCelula').value}.pdf`);
+    doc.text(doc.splitTextToSize(gerarTexto(), 180), 15, 15);
+    doc.save(`relatorio_${v('nomeCelula') || 'acqs'}.pdf`);
 }
 
 function gerarTXT() {
-    const blob = new Blob([gerarTextoRelatorio()], { type: 'text/plain' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `relatorio_${document.getElementById('nomeCelula').value}.txt`;
-    link.click();
+    const blob = new Blob([gerarTexto()], { type: 'text/plain' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `relatorio_${v('nomeCelula') || 'acqs'}.txt`;
+    a.click();
 }
 
-function mostrarTexto() {
-    document.getElementById('relatorioTexto').textContent = gerarTextoRelatorio();
+function verTexto() {
+    document.getElementById('modalTexto').textContent = gerarTexto();
     document.getElementById('modal').style.display = 'block';
 }
 
-function fecharModal() { document.getElementById('modal').style.display = 'none'; }
-
 function copiarTexto() {
-    navigator.clipboard.writeText(document.getElementById('relatorioTexto').textContent)
-        .then(() => mostrarMensagemSucesso('Texto copiado!'));
+    navigator.clipboard.writeText(document.getElementById('modalTexto').textContent)
+        .then(() => toast('Copiado!'));
 }
 
-function mostrarMensagemSucesso(mensagem) {
-    const msg = document.getElementById('successMessage');
-    msg.textContent = mensagem;
-    msg.style.display = 'block';
-    setTimeout(() => msg.style.display = 'none', 2000);
+function fecharModal() {
+    document.getElementById('modal').style.display = 'none';
 }
 
-function exportarRelatorios() {
-    const relatorios = carregarRelatorios();
-    if (relatorios.length === 0) { alert('Não há relatórios para exportar.'); return; }
-    const dataExportacao = new Date().toISOString().split('T')[0];
-    const blob = new Blob([JSON.stringify({ versao: '1.0', dataExportacao, totalRelatorios: relatorios.length, relatorios }, null, 2)], { type: 'application/json' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `relatorios_backup_${dataExportacao}.json`;
-    link.click();
-    mostrarMensagemSucesso('Relatórios exportados!');
+// ==================== HISTÓRICO ====================
+function renderHistorico() {
+    const lista = carregarRelatorios();
+    const el = document.getElementById('historicoConteudo');
+
+    if (lista.length === 0) {
+        el.innerHTML = '<p style="text-align:center;padding:40px;color:#888">Nenhum relatório guardado ainda.</p>';
+        return;
+    }
+
+    const porMes = {};
+    lista.forEach(r => {
+        const k = `${r.ano}-${String(r.mes).padStart(2, '0')}`;
+        if (!porMes[k]) porMes[k] = [];
+        porMes[k].push(r);
+    });
+
+    let html = '';
+    Object.keys(porMes).sort().reverse().forEach(k => {
+        const [ano, mes] = k.split('-');
+        const grupo = porMes[k];
+        html += `<div class="mes-grupo"><h3>${nomeMes(parseInt(mes))} ${ano} — ${grupo.length} relatório${grupo.length > 1 ? 's' : ''}</h3>`;
+        grupo.sort((a, b) => new Date(b.data) - new Date(a.data)).forEach(r => {
+            html += `
+            <div class="relatorio-item">
+                <div class="relatorio-info">
+                    <strong>${r.dados.nomeCelula || 'Sem nome'}</strong>
+                    <span>${r.dataFormatada}</span>
+                </div>
+                <div class="relatorio-acoes">
+                    <button class="btn-ver" onclick="verRelatorio(${r.id})"><i class="fas fa-eye"></i></button>
+                    <button class="btn-editar" onclick="editarRelatorio(${r.id})"><i class="fas fa-edit"></i></button>
+                    <button class="btn-apagar" onclick="apagarRelatorio(${r.id})"><i class="fas fa-trash"></i></button>
+                </div>
+            </div>`;
+        });
+        html += '</div>';
+    });
+    el.innerHTML = html;
 }
 
-function importarRelatorios(event) {
-    const arquivo = event.target.files[0];
-    if (!arquivo) return;
+function verRelatorio(id) {
+    const r = carregarRelatorios().find(r => r.id === id);
+    if (!r) return;
+    const ant = lerForm();
+    preencherForm(r.dados);
+    document.getElementById('dataRelatorio').value = new Date(r.data).toISOString().split('T')[0];
+    const texto = gerarTexto();
+    preencherForm(ant);
+    document.getElementById('modalTexto').textContent = texto;
+    document.getElementById('modal').style.display = 'block';
+}
+
+// ==================== ESTATÍSTICAS ====================
+function renderStats() {
+    const lista = carregarRelatorios();
+    const el = document.getElementById('statsConteudo');
+
+    if (lista.length === 0) {
+        el.innerHTML = '<p style="text-align:center;padding:40px;color:#888">Nenhum dado disponível.</p>';
+        return;
+    }
+
+    let cultos = lista.length, pVez = 0, jesus = 0, batiz = 0, part = 0;
+    lista.forEach(r => {
+        pVez += r.dados.primeiraVez || 0;
+        jesus += r.dados.receberamJesus || 0;
+        batiz += r.dados.batizados || 0;
+        part += r.dados.participantes || 0;
+    });
+
+    el.innerHTML = `
+        <div class="stats-grid" style="margin-bottom:20px">
+            <div class="stat-card"><i class="fas fa-calendar-check"></i><div class="num">${cultos}</div><div class="lbl">Cultos</div></div>
+            <div class="stat-card"><i class="fas fa-users"></i><div class="num">${part}</div><div class="lbl">Participantes</div></div>
+            <div class="stat-card"><i class="fas fa-user-plus"></i><div class="num">${pVez}</div><div class="lbl">1ª Vez</div></div>
+            <div class="stat-card"><i class="fas fa-heart"></i><div class="num">${jesus}</div><div class="lbl">Receberam Jesus</div></div>
+            <div class="stat-card"><i class="fas fa-water"></i><div class="num">${batiz}</div><div class="lbl">Batizados</div></div>
+            <div class="stat-card"><i class="fas fa-chart-line"></i><div class="num">${(part/cultos).toFixed(1)}</div><div class="lbl">Média/Culto</div></div>
+        </div>
+        <div id="statsMensais"></div>`;
+
+    const porMes = {};
+    lista.forEach(r => {
+        const k = `${r.ano}-${String(r.mes).padStart(2,'0')}`;
+        if (!porMes[k]) porMes[k] = { cultos:0, pVez:0, jesus:0, batiz:0, part:0 };
+        porMes[k].cultos++;
+        porMes[k].pVez += r.dados.primeiraVez || 0;
+        porMes[k].jesus += r.dados.receberamJesus || 0;
+        porMes[k].batiz += r.dados.batizados || 0;
+        porMes[k].part += r.dados.participantes || 0;
+    });
+
+    let html = '';
+    Object.keys(porMes).sort().reverse().forEach(k => {
+        const [ano, mes] = k.split('-');
+        const d = porMes[k];
+        html += `<div class="mes-grupo"><h3>${nomeMes(parseInt(mes))} ${ano}</h3>
+            <div class="stats-grid">
+                <div class="stat-card"><div class="num">${d.cultos}</div><div class="lbl">Cultos</div></div>
+                <div class="stat-card"><div class="num">${d.part}</div><div class="lbl">Participantes</div></div>
+                <div class="stat-card"><div class="num">${d.pVez}</div><div class="lbl">1ª Vez</div></div>
+                <div class="stat-card"><div class="num">${d.jesus}</div><div class="lbl">Receberam Jesus</div></div>
+                <div class="stat-card"><div class="num">${d.batiz}</div><div class="lbl">Batizados</div></div>
+            </div></div>`;
+    });
+    document.getElementById('statsMensais').innerHTML = html;
+}
+
+// ==================== EXPORT / IMPORT ====================
+function exportarJSON() {
+    const lista = carregarRelatorios();
+    if (lista.length === 0) { alert('Nenhum relatório para exportar.'); return; }
+    const data = new Date().toISOString().split('T')[0];
+    const blob = new Blob([JSON.stringify({ versao: '2.0', data, total: lista.length, relatorios: lista }, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `relatorios_acqs_${data}.json`;
+    a.click();
+    toast('Exportado com sucesso!');
+}
+
+function importarJSON(event) {
+    const file = event.target.files[0];
+    if (!file) return;
     const reader = new FileReader();
-    reader.onload = function(e) {
+    reader.onload = e => {
         try {
             const dados = JSON.parse(e.target.result);
-            if (!dados.relatorios || !Array.isArray(dados.relatorios)) { alert('Arquivo JSON inválido.'); return; }
+            if (!dados.relatorios || !Array.isArray(dados.relatorios)) { alert('Ficheiro inválido.'); return; }
             const existentes = carregarRelatorios();
             const ids = new Set(existentes.map(r => r.id));
             let novos = 0;
             dados.relatorios.forEach(r => { if (!ids.has(r.id)) { existentes.push(r); novos++; } });
             salvarRelatorios(existentes);
-            mostrarMensagemSucesso(`${novos} relatório(s) importado(s)!`);
+            toast(`${novos} relatório(s) importado(s)!`);
         } catch (e) { alert('Erro ao importar: ' + e.message); }
     };
-    reader.readAsText(arquivo);
+    reader.readAsText(file);
     event.target.value = '';
 }
 
-function carregarHistorico() {
-    const relatorios = carregarRelatorios();
-    if (relatorios.length === 0) { document.getElementById('historicoConteudo').innerHTML = '<p style="text-align:center;padding:40px;">Nenhum relatório salvo ainda.</p>'; return; }
-    const porAnoMes = {};
-    relatorios.forEach(r => { const c = `${r.ano}-${String(r.mes).padStart(2,'0')}`; if (!porAnoMes[c]) porAnoMes[c] = []; porAnoMes[c].push(r); });
-    let html = '';
-    Object.keys(porAnoMes).sort().reverse().forEach(c => {
-        const [ano, mes] = c.split('-');
-        const lista = porAnoMes[c];
-        html += `<div class="mes-grupo"><h3>${obterNomeMes(parseInt(mes))} ${ano} (${lista.length} relatório${lista.length > 1 ? 's' : ''})</h3><div class="relatorios-lista">`;
-        lista.sort((a, b) => new Date(b.data) - new Date(a.data)).forEach(r => {
-            html += `<div class="relatorio-item"><div class="relatorio-info"><strong>${r.dados.nomeCelula || 'Sem nome'}</strong><span>${r.dataFormatada}</span></div><div class="relatorio-acoes"><button onclick="visualizarRelatorio(${r.id})" class="btn-secundario"><i class="fas fa-eye"></i></button><button onclick="carregarRelatorio(${r.id})" class="btn-secundario"><i class="fas fa-edit"></i></button><button onclick="excluirRelatorio(${r.id})" class="btn-perigo"><i class="fas fa-trash"></i></button></div></div>`;
-        });
-        html += `</div></div>`;
-    });
-    document.getElementById('historicoConteudo').innerHTML = html;
+// ==================== NAVEGAÇÃO ====================
+function irPara(pagina) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+
+    document.getElementById(`page-${pagina}`).classList.add('active');
+    const idx = ['form','historico','stats','sync'].indexOf(pagina);
+    document.querySelectorAll('.nav-item')[idx]?.classList.add('active');
+
+    if (pagina === 'historico') renderHistorico();
+    if (pagina === 'stats') renderStats();
+    if (pagina === 'sync') { atualizarUISync(); atualizarOnline(); }
 }
 
-function obterNomeMes(n) { return ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'][n-1]; }
-
-function visualizarRelatorio(id) {
-    const r = carregarRelatorios().find(r => r.id === id);
-    if (!r) { alert('Relatório não encontrado.'); return; }
-    const antigos = obterDadosFormulario();
-    preencherFormulario(r.dados);
-    const texto = gerarTextoRelatorio();
-    preencherFormulario(antigos);
-    document.getElementById('relatorioTexto').textContent = texto;
-    document.getElementById('modal').style.display = 'block';
-}
-
-function carregarRelatorio(id) {
-    const r = carregarRelatorios().find(r => r.id === id);
-    if (!r) { alert('Relatório não encontrado.'); return; }
-    relatorioEmEdicao = r.id;
-    document.getElementById('dataRelatorio').value = new Date(r.data).toISOString().split('T')[0];
-    preencherFormulario(r.dados);
-    let editMode = document.getElementById('editMode');
-    if (!editMode) {
-        editMode = document.createElement('div');
-        editMode.id = 'editMode';
-        editMode.className = 'edit-mode-banner';
-        editMode.innerHTML = `<i class="fas fa-edit"></i><span>Editando relatório de ${r.dataFormatada}</span><button onclick="cancelarEdicao()" class="btn-secundario" style="margin:0;padding:5px 10px;"><i class="fas fa-times"></i> Cancelar</button>`;
-        document.querySelector('.toolbar').appendChild(editMode);
-    } else { editMode.style.display = 'flex'; editMode.querySelector('span').textContent = `Editando relatório de ${r.dataFormatada}`; }
-    mostrarPagina('form');
-    mostrarMensagemSucesso('Relatório carregado para edição!');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-function cancelarEdicao() {
-    if (confirm('Deseja cancelar a edição?')) { relatorioEmEdicao = null; document.getElementById('editMode').style.display = 'none'; limparFormulario(); mostrarMensagemSucesso('Edição cancelada'); }
-}
-
-function excluirRelatorio(id) {
-    if (!confirm('Tem certeza que deseja excluir este relatório?')) return;
-    salvarRelatorios(carregarRelatorios().filter(r => r.id !== id));
-    mostrarMensagemSucesso('Relatório excluído!');
-    carregarHistorico();
-}
-
-function limparFormulario() {
-    if (confirm('Tem certeza que deseja limpar todos os campos?')) {
-        document.getElementById('relatorioForm').reset();
-        document.getElementById('dataRelatorio').valueAsDate = new Date();
-        relatorioEmEdicao = null;
-        const e = document.getElementById('editMode');
-        if (e) e.style.display = 'none';
-        mostrarMensagemSucesso('Formulário limpo!');
+// ==================== UI ====================
+function atualizarUISync() {
+    const user = getUser();
+    document.getElementById('authBox').style.display = user ? 'none' : 'block';
+    document.getElementById('syncBox').style.display = user ? 'block' : 'none';
+    if (user) {
+        document.getElementById('syncEmail').textContent = user.email;
+        const s = localStorage.getItem(SYNC_KEY);
+        document.getElementById('syncData').textContent = s ? new Date(s).toLocaleString('pt-BR') : 'Nunca';
     }
 }
 
-function carregarEstatisticas() {
-    const relatorios = carregarRelatorios();
-    if (relatorios.length === 0) { document.getElementById('statsConteudo').innerHTML = '<p style="text-align:center;padding:40px;">Nenhum dado disponível ainda.</p>'; return; }
-    let totalCultos = relatorios.length, totalPrimeiraVez = 0, totalReceberamJesus = 0, totalBatizados = 0, totalParticipantes = 0;
-    relatorios.forEach(r => { totalPrimeiraVez += r.dados.primeiraVez || 0; totalReceberamJesus += r.dados.receberamJesus || 0; totalBatizados += r.dados.batizados || 0; totalParticipantes += r.dados.participantes || 0; });
-    const media = (totalParticipantes / totalCultos).toFixed(1);
-    document.getElementById('statsConteudo').innerHTML = `<div class="stats-grid"><div class="stat-card"><i class="fas fa-calendar-check"></i><div class="number">${totalCultos}</div><div class="label">Total de Cultos</div></div><div class="stat-card"><i class="fas fa-user-plus"></i><div class="number">${totalPrimeiraVez}</div><div class="label">Pessoas 1ª Vez</div></div><div class="stat-card"><i class="fas fa-heart"></i><div class="number">${totalReceberamJesus}</div><div class="label">Receberam Jesus</div></div><div class="stat-card"><i class="fas fa-water"></i><div class="number">${totalBatizados}</div><div class="label">Batizados</div></div><div class="stat-card"><i class="fas fa-users"></i><div class="number">${totalParticipantes}</div><div class="label">Total Participantes</div></div><div class="stat-card"><i class="fas fa-chart-line"></i><div class="number">${media}</div><div class="label">Média por Culto</div></div></div><h2 style="margin-top:30px;">Estatísticas por Mês</h2><div id="statsMensais"></div>`;
-    const porMes = {};
-    relatorios.forEach(r => { const c = `${r.ano}-${String(r.mes).padStart(2,'0')}`; if (!porMes[c]) porMes[c] = { cultos:0, primeiraVez:0, receberamJesus:0, batizados:0, participantes:0 }; porMes[c].cultos++; porMes[c].primeiraVez += r.dados.primeiraVez||0; porMes[c].receberamJesus += r.dados.receberamJesus||0; porMes[c].batizados += r.dados.batizados||0; porMes[c].participantes += r.dados.participantes||0; });
-    let htmlM = '';
-    Object.keys(porMes).sort().reverse().forEach(c => { const [ano,mes] = c.split('-'); const d = porMes[c]; htmlM += `<div class="mes-grupo"><h3>${obterNomeMes(parseInt(mes))} ${ano}</h3><div class="stats-grid"><div class="stat-card"><div class="number">${d.cultos}</div><div class="label">Cultos</div></div><div class="stat-card"><div class="number">${d.primeiraVez}</div><div class="label">1ª Vez</div></div><div class="stat-card"><div class="number">${d.receberamJesus}</div><div class="label">Receberam Jesus</div></div><div class="stat-card"><div class="number">${d.batizados}</div><div class="label">Batizados</div></div></div></div>`; });
-    document.getElementById('statsMensais').innerHTML = htmlM;
+function atualizarOnline() {
+    const dot = document.getElementById('onlineDot');
+    if (dot) dot.className = 'online-dot ' + (isOnline ? 'online' : 'offline');
 }
 
-if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(err => console.log('Erro SW:', err)); }); }
+// ==================== LOADING / TOAST ====================
+function mostrarLoading(msg = 'Carregando...') {
+    document.getElementById('loadingMsg').textContent = msg;
+    document.getElementById('loadingOverlay').style.display = 'flex';
+}
 
-window.addEventListener('DOMContentLoaded', () => { document.getElementById('dataRelatorio').valueAsDate = new Date(); atualizarStatusConexao(); });
+function esconderLoading() {
+    document.getElementById('loadingOverlay').style.display = 'none';
+}
 
+function toast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.style.display = 'block';
+    setTimeout(() => t.style.display = 'none', 2500);
+}
+
+// ==================== HELPERS ====================
+function v(id) { return document.getElementById(id)?.value || ''; }
+function sv(id, val) { const el = document.getElementById(id); if (el) el.value = val ?? ''; }
+function nomeMes(n) { return ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'][n-1]; }
+
+// ==================== PWA ====================
 let deferredPrompt;
-const installPrompt = document.getElementById('installPrompt');
-const installButton = document.getElementById('installButton');
-const dismissInstall = document.getElementById('dismissInstall');
+window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    deferredPrompt = e;
+    document.getElementById('installBar').style.display = 'flex';
+});
 
-window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredPrompt = e; installPrompt.style.display = 'block'; });
-
-installButton.addEventListener('click', async () => {
-    if (!deferredPrompt) { mostrarInstrucoesInstalacao(); return; }
+document.getElementById('btnInstall')?.addEventListener('click', async () => {
+    if (!deferredPrompt) return;
     deferredPrompt.prompt();
     await deferredPrompt.userChoice;
     deferredPrompt = null;
-    installPrompt.style.display = 'none';
+    document.getElementById('installBar').style.display = 'none';
 });
 
-dismissInstall.addEventListener('click', () => { installPrompt.style.display = 'none'; sessionStorage.setItem('installDismissed', 'true'); });
-window.addEventListener('appinstalled', () => { installPrompt.style.display = 'none'; mostrarMensagemSucesso('App instalado com sucesso!'); });
+document.getElementById('btnDismiss')?.addEventListener('click', () => {
+    document.getElementById('installBar').style.display = 'none';
+});
 
-window.addEventListener('load', () => {
-    if (!sessionStorage.getItem('installDismissed')) {
-        setTimeout(() => {
-            if (window.matchMedia('(display-mode: standalone)').matches) return;
-            if (deferredPrompt) { installPrompt.style.display = 'block'; }
-        }, 3000);
+window.addEventListener('appinstalled', () => {
+    document.getElementById('installBar').style.display = 'none';
+    toast('App instalado!');
+});
+
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(() => {});
+    });
+}
+
+// ==================== INIT ====================
+window.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('dataRelatorio').valueAsDate = new Date();
+    atualizarOnline();
+    atualizarUISync();
+
+    // Sincronização automática (7 dias)
+    const user = getUser();
+    const s = localStorage.getItem(SYNC_KEY);
+    if (user && isOnline && s) {
+        const dias = (new Date() - new Date(s)) / (1000 * 60 * 60 * 24);
+        if (dias >= 7) setTimeout(() => enviarNuvem(), 5000);
     }
 });
-
-function mostrarInstrucoesInstalacao() {
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-    const isAndroid = /Android/.test(navigator.userAgent);
-    if (isIOS) alert('Para instalar no iOS:\n\n1. Toque no botão de compartilhar\n2. Role para baixo\n3. Toque em "Adicionar à Tela de Início"');
-    else if (isAndroid) alert('Para instalar no Android:\n\n1. Toque nos 3 pontinhos\n2. Selecione "Instalar app"\n3. Confirme');
-    else alert('Para instalar:\n\n1. Abra o menu do navegador\n2. Procure "Instalar"\n3. Confirme');
-}
