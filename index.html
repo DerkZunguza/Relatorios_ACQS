@@ -3,856 +3,464 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#000000">
-    <meta name="description" content="Sistema de Relatórios ACQS - Gestão de Células">
+    <meta name="theme-color" content="#1a1a1a">
+    <meta name="description" content="Sistema de Relatórios ACQS">
     <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="icon-192.png">
     <title>Relatório ACQS</title>
-    
-    <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <!-- jsPDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background-color: #fafafa;
-            padding: 20px;
-        }
-        
-        .container {
-            max-width: 700px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 8px;
-            padding: 20px 30px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-        }
-        
-        .page {
-            display: none;
-        }
-        
-        .page.active {
-            display: block;
-        }
-        
-        h1, h2 {
-            margin-top: 20px;
-            margin-bottom: 10px;
-            color: #222;
-        }
-        
-        h1 {
-            font-size: 1.5rem;
-        }
-        
-        h2 {
-            font-size: 1.2rem;
-        }
-        
-        label {
-            display: block;
-            margin-top: 10px;
-            font-weight: bold;
-            color: #333;
-        }
-        
-        input, textarea {
-            width: 100%;
-            margin-top: 5px;
-            margin-bottom: 15px;
-            padding: 8px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            font-size: 1rem;
-        }
-        
-        textarea {
-            resize: vertical;
-        }
-        
-        hr {
-            margin: 20px 0;
-            border: 0;
-            border-top: 1px solid #ddd;
-        }
-        
-        button {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 4px;
-            background-color: black;
-            color: white;
-            font-size: 1rem;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-        
-        button:hover {
-            background-color: #333;
-        }
-        
-        button:active {
-            transform: scale(0.98);
-        }
-        
-        button i {
-            margin-right: 8px;
-        }
-        
-        .button-group {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            justify-content: center;
-            margin-top: 20px;
-        }
-        
-        .button-group button {
-            flex: 1;
-            min-width: 140px;
-        }
-        
-        .btn-success {
-            background-color: #2e7d32;
-        }
-        
-        .btn-success:hover {
-            background-color: #388e3c;
-        }
-        
-        .btn-info {
-            background-color: #0288d1;
-        }
-        
-        .btn-info:hover {
-            background-color: #039be5;
-        }
-        
-        .btn-secundario {
-            background-color: #555;
-        }
-        
-        .btn-secundario:hover {
-            background-color: #777;
-        }
-        
-        .btn-perigo {
-            background-color: #d32f2f;
-        }
-        
-        .btn-perigo:hover {
-            background-color: #f44336;
-        }
-        
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            z-index: 1000;
-        }
-        
-        .modal-content {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: white;
-            padding: 20px;
-            max-width: 90%;
-            max-height: 80%;
-            overflow-y: auto;
-            border-radius: 8px;
-        }
-        
-        .relatorio-preview {
-            white-space: pre-wrap;
-            background: #f9f9f9;
-            padding: 10px;
-            border: 1px solid #ddd;
-            font-family: monospace;
-            font-size: 0.9rem;
-        }
-        
-        .success-message {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: #2e7d32;
-            color: white;
-            padding: 15px 20px;
-            display: none;
-            border-radius: 4px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-            z-index: 2000;
-        }
-        
-        .install-prompt {
-            position: fixed;
-            bottom: 70px;
-            left: 10px;
-            right: 10px;
-            background: white;
-            border: 2px solid #2e7d32;
-            border-radius: 8px;
-            padding: 15px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-            z-index: 1500;
-            animation: slideUp 0.3s ease-out;
-        }
-        
-        @keyframes slideUp {
-            from {
-                transform: translateY(100%);
-                opacity: 0;
-            }
-            to {
-                transform: translateY(0);
-                opacity: 1;
-            }
-        }
-        
-        .install-content {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .install-content > i {
-            font-size: 2rem;
-            color: #2e7d32;
-        }
-        
-        .install-text {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            gap: 3px;
-        }
-        
-        .install-text strong {
-            font-size: 1rem;
-            color: #000;
-        }
-        
-        .install-text span {
-            font-size: 0.85rem;
-            color: #666;
-        }
-        
-        .install-prompt button {
-            margin: 0;
-            padding: 8px 12px;
-            font-size: 0.9rem;
-        }
-        
-        #dismissInstall {
-            padding: 8px 12px;
-        }
-        
-        .mes-grupo {
-            margin-bottom: 30px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            padding: 15px;
-        }
-        
-        .mes-grupo h3 {
-            margin-top: 0;
-            color: #333;
-            border-bottom: 2px solid #000;
-            padding-bottom: 10px;
-        }
-        
-        .relatorios-lista {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-        
-        .relatorio-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 10px;
-            background: #f9f9f9;
-            border-radius: 4px;
-            border: 1px solid #e0e0e0;
-        }
-        
-        .relatorio-info {
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-        }
-        
-        .relatorio-info strong {
-            font-size: 1rem;
-        }
-        
-        .relatorio-info span {
-            font-size: 0.85rem;
-            color: #666;
-        }
-        
-        .relatorio-acoes {
-            display: flex;
-            gap: 5px;
-        }
-        
-        .relatorio-acoes button {
-            padding: 6px 12px;
-            font-size: 0.85rem;
-        }
-        
-        input[type="file"] {
-            display: none;
-        }
-        
-        .toolbar {
-            position: sticky;
-            top: 0;
-            background: white;
-            padding: 15px;
-            border-bottom: 2px solid #000;
-            margin: -20px -30px 20px -30px;
-            z-index: 100;
-        }
-        
-        .toolbar h1 {
-            margin: 0 0 15px 0;
-        }
-        
-        .nav-bar {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: #000;
-            display: flex;
-            justify-content: space-around;
-            padding: 10px 0;
-            box-shadow: 0 -2px 8px rgba(0,0,0,0.2);
-            z-index: 1000;
-        }
-        
-        .nav-item {
-            flex: 1;
-            text-align: center;
-            color: white;
-            cursor: pointer;
-            padding: 10px;
-            transition: background-color 0.2s;
-        }
-        
-        .nav-item:hover {
-            background-color: #333;
-        }
-        
-        .nav-item.active {
-            background-color: #2e7d32;
-        }
-        
-        .nav-item i {
-            display: block;
-            font-size: 1.5rem;
-            margin-bottom: 5px;
-        }
-        
-        .nav-item span {
-            font-size: 0.75rem;
-        }
-        
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 15px;
-            margin: 20px 0;
-        }
-        
-        .stat-card {
-            background: #f9f9f9;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            padding: 20px;
-            text-align: center;
-        }
-        
-        .stat-card i {
-            font-size: 2rem;
-            color: #2e7d32;
-            margin-bottom: 10px;
-        }
-        
-        .stat-card .number {
-            font-size: 2rem;
-            font-weight: bold;
-            color: #000;
-            margin: 10px 0;
-        }
-        
-        .stat-card .label {
-            font-size: 0.9rem;
-            color: #666;
-        }
-        
-        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #f0f0f0;
             padding-bottom: 80px;
         }
-        
-        .online-indicator {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            display: inline-block;
-            margin-left: 10px;
-            animation: pulse 2s infinite;
-        }
-        
-        .online-indicator.online {
-            background-color: #2e7d32;
-        }
-        
-        .online-indicator.offline {
-            background-color: #d32f2f;
-            animation: none;
-        }
-        
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-        
-        .sync-info {
-            background: #f9f9f9;
-            padding: 20px;
-            border-radius: 8px;
-            border: 1px solid #ddd;
-            margin-bottom: 20px;
-        }
-        
-        .sync-info h3 {
-            margin-top: 0;
-            color: #2e7d32;
-        }
-        
-        .sync-info p {
-            margin: 10px 0;
-            color: #333;
-        }
-        
-        .sync-notice {
-            display: flex;
-            align-items: flex-start;
-            gap: 15px;
-            background: #e8f5e9;
-            padding: 15px;
-            border-radius: 8px;
-            border-left: 4px solid #2e7d32;
-            margin-top: 30px;
-        }
-        
-        .sync-notice i {
-            font-size: 1.5rem;
-            color: #2e7d32;
-            margin-top: 5px;
-        }
-        
-        .sync-notice p {
-            margin: 5px 0 0 0;
-            color: #666;
-            font-size: 0.9rem;
-        }
-        
-        .loading-overlay {
+
+        .page { display: none; }
+        .page.active { display: block; }
+
+        /* NAVBAR */
+        .nav-bar {
             position: fixed;
+            bottom: 0; left: 0; right: 0;
+            background: #1a1a1a;
+            display: flex;
+            z-index: 1000;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.3);
+        }
+        .nav-item {
+            flex: 1; text-align: center;
+            color: #888; cursor: pointer;
+            padding: 12px 0;
+            transition: all 0.2s;
+        }
+        .nav-item.active { color: #fff; background: #2e7d32; }
+        .nav-item i { display: block; font-size: 1.3rem; margin-bottom: 3px; }
+        .nav-item span { font-size: 0.7rem; }
+
+        /* TOOLBAR */
+        .toolbar {
+            background: #1a1a1a;
+            color: white;
+            padding: 15px;
+            position: sticky;
             top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.7);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 9999;
+            z-index: 100;
         }
-        
-        .loading-content {
+        .toolbar h1 { font-size: 1.1rem; margin-bottom: 10px; }
+        .toolbar-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+        .toolbar-btns button {
+            flex: 1; min-width: 70px;
+            padding: 8px 5px;
+            border: none; border-radius: 4px;
+            font-size: 0.75rem; cursor: pointer;
+            background: #333; color: white;
+            transition: background 0.2s;
+        }
+        .toolbar-btns button:hover { background: #555; }
+        .toolbar-btns button.green { background: #2e7d32; }
+        .toolbar-btns button.green:hover { background: #388e3c; }
+
+        /* CONTAINER */
+        .container { max-width: 700px; margin: 0 auto; padding: 15px; }
+
+        /* CARD */
+        .card {
             background: white;
-            padding: 30px;
             border-radius: 8px;
-            text-align: center;
-            max-width: 300px;
-        }
-        
-        .loading-content i {
-            font-size: 3rem;
-            color: #2e7d32;
+            padding: 20px;
             margin-bottom: 15px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.1);
         }
-        
-        .loading-content p {
-            margin: 0;
-            color: #333;
-            font-weight: bold;
+        .card h2 {
+            font-size: 1rem;
+            color: #1a1a1a;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #2e7d32;
         }
-        
-        .edit-mode-banner {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            background: #fff3cd;
-            border: 2px solid #ffc107;
+
+        /* FORM */
+        label { display: block; font-size: 0.85rem; font-weight: 600; color: #444; margin-bottom: 4px; margin-top: 12px; }
+        label:first-child { margin-top: 0; }
+        input, textarea, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 0.95rem;
+            background: #fafafa;
+            transition: border 0.2s;
+        }
+        input:focus, textarea:focus { outline: none; border-color: #2e7d32; background: white; }
+        textarea { resize: vertical; }
+        .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+        /* BUTTONS */
+        .btn {
+            padding: 10px 18px;
+            border: none; border-radius: 6px;
+            font-size: 0.9rem; cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex; align-items: center; gap: 6px;
+        }
+        .btn-green { background: #2e7d32; color: white; }
+        .btn-green:hover { background: #388e3c; }
+        .btn-blue { background: #0288d1; color: white; }
+        .btn-blue:hover { background: #039be5; }
+        .btn-gray { background: #555; color: white; }
+        .btn-gray:hover { background: #777; }
+        .btn-red { background: #d32f2f; color: white; }
+        .btn-red:hover { background: #e53935; }
+        .btn-group { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 15px; }
+        .btn-group .btn { flex: 1; min-width: 100px; justify-content: center; }
+
+        /* STATS */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 12px;
+        }
+        .stat-card {
+            background: white;
             border-radius: 8px;
-            padding: 10px 15px;
-            margin-top: 15px;
+            padding: 15px;
+            text-align: center;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.1);
         }
-        
-        .edit-mode-banner i {
-            color: #ff9800;
-            font-size: 1.2rem;
+        .stat-card i { font-size: 1.8rem; color: #2e7d32; }
+        .stat-card .num { font-size: 1.8rem; font-weight: bold; color: #1a1a1a; margin: 8px 0 4px; }
+        .stat-card .lbl { font-size: 0.8rem; color: #666; }
+
+        /* HISTORICO */
+        .mes-grupo { background: white; border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+        .mes-grupo h3 { font-size: 0.95rem; color: #1a1a1a; border-bottom: 2px solid #2e7d32; padding-bottom: 8px; margin-bottom: 12px; }
+        .relatorio-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; background: #f9f9f9; border-radius: 6px; margin-bottom: 8px; border-left: 3px solid #2e7d32; }
+        .relatorio-info strong { display: block; font-size: 0.9rem; }
+        .relatorio-info span { font-size: 0.8rem; color: #888; }
+        .relatorio-acoes { display: flex; gap: 5px; }
+        .relatorio-acoes button { padding: 6px 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem; color: white; }
+        .btn-ver { background: #555; }
+        .btn-editar { background: #0288d1; }
+        .btn-apagar { background: #d32f2f; }
+
+        /* SYNC / AUTH */
+        .auth-box { background: white; border-radius: 8px; padding: 25px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+        .auth-box h2 { font-size: 1.1rem; margin-bottom: 5px; }
+        .auth-box p { color: #666; font-size: 0.85rem; margin-bottom: 20px; }
+        .auth-link { text-align: center; margin-top: 15px; font-size: 0.85rem; color: #666; }
+        .auth-link a { color: #2e7d32; font-weight: bold; text-decoration: none; }
+
+        .sync-info { background: white; border-radius: 8px; padding: 20px; margin-bottom: 15px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); border-left: 4px solid #2e7d32; }
+        .sync-info h3 { color: #2e7d32; margin-bottom: 10px; }
+        .sync-info p { font-size: 0.9rem; color: #444; margin: 5px 0; }
+
+        .online-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-left: 8px; }
+        .online-dot.online { background: #2e7d32; animation: pulse 2s infinite; }
+        .online-dot.offline { background: #d32f2f; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+        /* MODAL */
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 2000; }
+        .modal-box {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: white; border-radius: 8px;
+            padding: 20px; width: 90%; max-width: 600px;
+            max-height: 80vh; overflow-y: auto;
         }
-        
-        .edit-mode-banner span {
-            flex: 1;
-            font-weight: bold;
-            color: #856404;
+        .modal-box h2 { margin-bottom: 15px; font-size: 1rem; }
+        .relatorio-preview {
+            white-space: pre-wrap; background: #f9f9f9;
+            padding: 12px; border: 1px solid #ddd;
+            border-radius: 6px; font-family: monospace;
+            font-size: 0.85rem; margin-bottom: 15px;
         }
-        
-        @media (max-width: 768px) {
-            body {
-                padding: 10px;
-                padding-bottom: 80px;
-            }
-            
-            .container {
-                padding: 15px;
-            }
-            
-            .toolbar {
-                margin: -15px -15px 20px -15px;
-            }
-            
-            .button-group button {
-                width: 100%;
-                min-width: auto;
-            }
-            
-            .relatorio-item {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 10px;
-            }
-            
-            .relatorio-acoes {
-                width: 100%;
-            }
-            
-            .stats-grid {
-                grid-template-columns: 1fr;
-            }
-            
-            .sync-notice {
-                flex-direction: column;
-            }
+
+        /* EDIT BANNER */
+        .edit-banner {
+            display: none; align-items: center; gap: 10px;
+            background: #fff3cd; border: 1px solid #ffc107;
+            border-radius: 6px; padding: 8px 12px; margin-top: 10px;
+            font-size: 0.85rem; color: #856404;
         }
-        
+        .edit-banner button { padding: 4px 10px; border: none; border-radius: 4px; background: #555; color: white; cursor: pointer; font-size: 0.8rem; }
+
+        /* LOADING */
+        .loading-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.7); z-index: 9999;
+            align-items: center; justify-content: center;
+        }
+        .loading-box { background: white; padding: 25px; border-radius: 8px; text-align: center; }
+        .loading-box i { font-size: 2.5rem; color: #2e7d32; margin-bottom: 10px; }
+        .loading-box p { font-size: 0.9rem; color: #333; font-weight: 600; }
+
+        /* SUCCESS */
+        .success-toast {
+            display: none; position: fixed;
+            top: 15px; right: 15px;
+            background: #2e7d32; color: white;
+            padding: 12px 18px; border-radius: 6px;
+            font-size: 0.9rem; z-index: 3000;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+        }
+
+        /* INSTALL */
+        .install-bar {
+            display: none; position: fixed;
+            bottom: 70px; left: 10px; right: 10px;
+            background: white; border: 2px solid #2e7d32;
+            border-radius: 8px; padding: 12px 15px;
+            z-index: 1500; box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            display: none; align-items: center; gap: 10px;
+        }
+        .install-bar span { flex: 1; font-size: 0.85rem; color: #333; }
+
         @media (max-width: 480px) {
-            h1 {
-                font-size: 1.2rem;
-            }
-            
-            input, textarea {
-                font-size: 0.9rem;
-                padding: 6px;
-            }
+            .row { grid-template-columns: 1fr; }
+            .btn-group .btn { min-width: 80px; }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <!-- PÁGINA: FORMULÁRIO -->
-        <div id="page-form" class="page active">
-            <div class="toolbar">
-                <h1>Relatório da Célula</h1>
-                <div class="button-group">
-                    <button type="button" onclick="salvarRelatorioAtual()" class="btn-success">
-                        <i class="fas fa-save"></i>Salvar
-                    </button>
-                    <button type="button" onclick="exportarRelatorios()" class="btn-secundario">
-                        <i class="fas fa-download"></i>Exportar
-                    </button>
-                    <button type="button" onclick="document.getElementById('importFile').click()" class="btn-secundario">
-                        <i class="fas fa-upload"></i>Importar
-                    </button>
-                    <button type="button" onclick="limparFormulario()" class="btn-secundario">
-                        <i class="fas fa-trash"></i>Limpar
-                    </button>
-                </div>
-                <input type="file" id="importFile" accept=".json" onchange="importarRelatorios(event)">
-            </div>
 
-            <form id="relatorioForm">
-                <h2>Dados gerais</h2>
-                
-                <label>Data do relatório:</label>
-                <input type="date" id="dataRelatorio" required>
-                
-                <label>Nome da célula:</label>
-                <input type="text" id="nomeCelula" placeholder="Ex: Unizambeze">
-                
-                <label>Local do culto:</label>
-                <input type="text" id="localCulto" placeholder="Ex: Campo do Matacuane">
-                
-                <h4>Hora do Culto:</h4>
-                <label>Início</label>
-                <input type="time" id="cultoInicio">
-                
-                <label>Fim</label>
-                <input type="time" id="cultoFim">
-                
-                <label>Moderador do culto:</label>
-                <input type="text" id="moderador">
-                
-                <hr>
-                <h2>Momento de intercessão</h2>
-                <label>Intercederam a favor do culto:</label>
-                <textarea rows="5" id="intercessores" placeholder="Digite os nomes dos intercessores"></textarea>
-                
-                <h4>Hora da intercessão:</h4>
-                <label>Início</label>
-                <input type="time" id="intercessaoInicio">
-                
-                <label>Fim</label>
-                <input type="time" id="intercessaoFim">
-                
-                <h2>Momento da oração</h2>
-                <label>Pontos de oração:</label>
-                <textarea rows="5" id="pontosOracao" placeholder="Digite os pontos de oração"></textarea>
-                
-                <hr>
-                <h2>Momento da palavra</h2>
-                <label>Pregador evangelista:</label>
-                <input type="text" id="pregadorEvangelista">
-                
-                <label>Pregador principal:</label>
-                <input type="text" id="pregadorPrincipal">
-                
-                <label>Tema da pregação:</label>
-                <input type="text" id="temaPregacao">
-                
-                <label>Notas da pregação:</label>
-                <textarea rows="5" id="notasPregacao" placeholder="Digite os versículos e notas"></textarea>
-                
-                <hr>
-                <h2>Estatística</h2>
-                <label>Lista de presenças:</label>
-                <textarea rows="5" id="listaPresencas"></textarea>
-                
-                <label>Pessoas que vieram pela 1ª vez:</label>
-                <input type="number" id="primeiraVez" value="0">
-                
-                <label>Pessoas que receberam a Jesus:</label>
-                <input type="number" id="receberamJesus" value="0">
-                
-                <label>Pessoas batizadas:</label>
-                <input type="number" id="batizados" value="0">
-                
-                <label>Total de participantes:</label>
-                <input type="number" id="participantes" value="0">
-                
-                <div class="button-group">
-                    <button type="button" onclick="gerarPDF()">
-                        <i class="fas fa-file-pdf"></i>Baixar PDF
-                    </button>
-                    <button type="button" onclick="gerarTXT()">
-                        <i class="fas fa-file-alt"></i>Baixar TXT
-                    </button>
-                    <button type="button" onclick="mostrarTexto()">
-                        <i class="fas fa-copy"></i>Copiar
-                    </button>
-                </div>
-            </form>
+<!-- PÁGINA: FORMULÁRIO -->
+<div id="page-form" class="page active">
+    <div class="toolbar">
+        <h1>Relatório da Célula</h1>
+        <div class="toolbar-btns">
+            <button class="green" onclick="salvarRelatorio()"><i class="fas fa-save"></i> Salvar</button>
+            <button onclick="exportarJSON()"><i class="fas fa-download"></i> Exportar</button>
+            <button onclick="document.getElementById('importFile').click()"><i class="fas fa-upload"></i> Importar</button>
+            <button onclick="limparForm()"><i class="fas fa-trash"></i> Limpar</button>
         </div>
-
-        <!-- PÁGINA: HISTÓRICO -->
-        <div id="page-historico" class="page">
-            <div class="toolbar">
-                <h1>Histórico de Relatórios</h1>
-            </div>
-            <div id="historicoConteudo"></div>
-        </div>
-
-        <!-- PÁGINA: ESTATÍSTICAS -->
-        <div id="page-stats" class="page">
-            <div class="toolbar">
-                <h1>Estatísticas</h1>
-            </div>
-            <div id="statsConteudo"></div>
-        </div>
-
-        <!-- PÁGINA: SINCRONIZAÇÃO -->
-        <div id="page-sync" class="page">
-            <div class="toolbar">
-                <h1>Sincronização na Nuvem</h1>
-                <div class="online-indicator" id="onlineIndicator"></div>
-            </div>
-
-            <!-- Seção de Autenticação -->
-            <div id="authSection">
-                <!-- Login -->
-                <div id="loginFormWrapper">
-                    <h2>Fazer Login</h2>
-                    <p style="color: #666; margin-bottom: 20px;">Entre com sua conta para sincronizar dados na nuvem</p>
-                    
-                    <form id="loginForm" onsubmit="processarLogin(event)">
-                        <label>Email:</label>
-                        <input type="email" id="loginEmail" required>
-                        
-                        <label>Senha:</label>
-                        <input type="password" id="loginPassword" required minlength="6">
-                        
-                        <button type="submit" class="btn-success">
-                            <i class="fas fa-sign-in-alt"></i>Entrar
-                        </button>
-                    </form>
-                    
-                    <p style="text-align: center; margin-top: 20px;">
-                        Não tem conta? 
-                        <a href="#" onclick="mostrarFormRegistro(); return false;" style="color: #2e7d32; font-weight: bold;">Criar conta</a>
-                    </p>
-                </div>
-
-                <!-- Registro -->
-                <div id="registerFormWrapper" style="display: none;">
-                    <h2>Criar Conta</h2>
-                    <p style="color: #666; margin-bottom: 20px;">Crie uma conta para salvar seus dados na nuvem</p>
-                    
-                    <form id="registerForm" onsubmit="processarRegistro(event)">
-                        <label>Email:</label>
-                        <input type="email" id="registerEmail" required>
-                        
-                        <label>Senha (mínimo 6 caracteres):</label>
-                        <input type="password" id="registerPassword" required minlength="6">
-                        
-                        <label>Confirmar Senha:</label>
-                        <input type="password" id="confirmPassword" required minlength="6">
-                        
-                        <button type="submit" class="btn-success">
-                            <i class="fas fa-user-plus"></i>Criar Conta
-                        </button>
-                    </form>
-                    
-                    <p style="text-align: center; margin-top: 20px;">
-                        Já tem conta? 
-                        <a href="#" onclick="mostrarFormLogin(); return false;" style="color: #2e7d32; font-weight: bold;">Fazer login</a>
-                    </p>
-                </div>
-            </div>
-
-            <!-- Seção de Sincronização -->
-            <div id="syncSection" style="display: none;">
-                <div class="sync-info">
-                    <h3>Conta Conectada</h3>
-                    <p><strong>Email:</strong> <span id="userEmail"></span></p>
-                    <p><strong>Última sincronização:</strong> <span id="lastSync">Nunca</span></p>
-                </div>
-
-                <div class="button-group" style="margin-top: 30px;">
-                    <button onclick="sincronizarParaNuvem()" class="btn-success">
-                        <i class="fas fa-cloud-upload-alt"></i>Enviar para Nuvem
-                    </button>
-                    <button onclick="baixarDaNuvem()" class="btn-info">
-                        <i class="fas fa-cloud-download-alt"></i>Baixar da Nuvem
-                    </button>
-                </div>
-
-                <div class="sync-notice">
-                    <i class="fas fa-info-circle"></i>
-                    <div>
-                        <strong>Sincronização Automática</strong>
-                        <p>Seus dados são sincronizados automaticamente a cada 7 dias quando você estiver online.</p>
-                    </div>
-                </div>
-
-                <button onclick="fazerLogout()" class="btn-secundario" style="width: 100%; margin-top: 30px;">
-                    <i class="fas fa-sign-out-alt"></i>Sair da Conta
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODAL DE VISUALIZAÇÃO -->
-    <div id="modal" class="modal">
-        <div class="modal-content">
-            <h2>Relatório Gerado</h2>
-            <div class="relatorio-preview" id="relatorioTexto"></div>
-            <div class="button-group">
-                <button onclick="copiarTexto()">
-                    <i class="fas fa-copy"></i>Copiar
-                </button>
-                <button onclick="fecharModal()">
-                    <i class="fas fa-times"></i>Fechar
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- MENSAGEM DE SUCESSO -->
-    <div id="successMessage" class="success-message">
-        Mensagem de sucesso
-    </div>
-
-    <!-- BOTÃO DE INSTALAÇÃO PWA -->
-    <div id="installPrompt" class="install-prompt" style="display: none;">
-        <div class="install-content">
-            <i class="fas fa-mobile-alt"></i>
-            <div class="install-text">
-                <strong>Instalar Aplicativo</strong>
-                <span>Use o app offline no seu celular!</span>
-            </div>
-            <button id="installButton" class="btn-success">
-                <i class="fas fa-download"></i> Instalar
-            </button>
-            <button id="dismissInstall" class="btn-secundario">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-    </div>
-
-    <!-- BARRA DE NAVEGAÇÃO -->
-    <div class="nav-bar">
-        <div class="nav-item active" onclick="mostrarPagina('form')">
+        <div class="edit-banner" id="editBanner">
             <i class="fas fa-edit"></i>
-            <span>Formulário</span>
+            <span id="editBannerText">Editando relatório</span>
+            <button onclick="cancelarEdicao()">Cancelar</button>
         </div>
-        <div class="nav-item" onclick="mostrarPagina('historico')">
-            <i class="fas fa-folder-open"></i>
-            <span>Histórico</span>
-        </div>
-        <div class="nav-item" onclick="mostrarPagina('stats')">
-            <i class="fas fa-chart-bar"></i>
-            <span>Estatísticas</span>
-        </div>
-        <div class="nav-item" onclick="mostrarPagina('sync')">
-            <i class="fas fa-cloud"></i>
-            <span>Nuvem</span>
-        </div>
+        <input type="file" id="importFile" accept=".json" style="display:none" onchange="importarJSON(event)">
     </div>
 
-    <script src="script.js"></script>
+    <div class="container">
+        <div class="card">
+            <h2>Dados Gerais</h2>
+            <label>Data do Relatório</label>
+            <input type="date" id="dataRelatorio">
+            <label>Nome da Célula</label>
+            <input type="text" id="nomeCelula" placeholder="Ex: Matacuane">
+            <label>Local do Culto</label>
+            <input type="text" id="localCulto" placeholder="Ex: Campo do Matacuane">
+            <div class="row">
+                <div>
+                    <label>Início do Culto</label>
+                    <input type="time" id="cultoInicio">
+                </div>
+                <div>
+                    <label>Fim do Culto</label>
+                    <input type="time" id="cultoFim">
+                </div>
+            </div>
+            <label>Moderador</label>
+            <input type="text" id="moderador">
+        </div>
+
+        <div class="card">
+            <h2>Intercessão</h2>
+            <label>Intercessores</label>
+            <textarea id="intercessores" rows="4" placeholder="Um nome por linha"></textarea>
+            <div class="row">
+                <div>
+                    <label>Início</label>
+                    <input type="time" id="intercessaoInicio">
+                </div>
+                <div>
+                    <label>Fim</label>
+                    <input type="time" id="intercessaoFim">
+                </div>
+            </div>
+            <label>Pontos de Oração</label>
+            <textarea id="pontosOracao" rows="4" placeholder="Um ponto por linha"></textarea>
+        </div>
+
+        <div class="card">
+            <h2>Momento da Palavra</h2>
+            <label>Pregador Evangelista</label>
+            <input type="text" id="pregadorEvangelista">
+            <label>Pregador Principal</label>
+            <input type="text" id="pregadorPrincipal">
+            <label>Tema da Pregação</label>
+            <input type="text" id="temaPregacao">
+            <label>Notas da Pregação</label>
+            <textarea id="notasPregacao" rows="5" placeholder="Versículos e notas"></textarea>
+        </div>
+
+        <div class="card">
+            <h2>Estatísticas</h2>
+            <label>Lista de Presenças</label>
+            <textarea id="listaPresencas" rows="5" placeholder="Um nome por linha"></textarea>
+            <div class="row">
+                <div>
+                    <label>1ª Vez</label>
+                    <input type="number" id="primeiraVez" value="0" min="0">
+                </div>
+                <div>
+                    <label>Receberam Jesus</label>
+                    <input type="number" id="receberamJesus" value="0" min="0">
+                </div>
+            </div>
+            <div class="row">
+                <div>
+                    <label>Batizados</label>
+                    <input type="number" id="batizados" value="0" min="0">
+                </div>
+                <div>
+                    <label>Total Participantes</label>
+                    <input type="number" id="participantes" value="0" min="0">
+                </div>
+            </div>
+            <div class="btn-group">
+                <button class="btn btn-gray" onclick="gerarPDF()"><i class="fas fa-file-pdf"></i> PDF</button>
+                <button class="btn btn-gray" onclick="gerarTXT()"><i class="fas fa-file-alt"></i> TXT</button>
+                <button class="btn btn-gray" onclick="verTexto()"><i class="fas fa-copy"></i> Copiar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- PÁGINA: HISTÓRICO -->
+<div id="page-historico" class="page">
+    <div class="toolbar"><h1>Histórico de Relatórios</h1></div>
+    <div class="container" id="historicoConteudo"></div>
+</div>
+
+<!-- PÁGINA: ESTATÍSTICAS -->
+<div id="page-stats" class="page">
+    <div class="toolbar"><h1>Estatísticas</h1></div>
+    <div class="container" id="statsConteudo"></div>
+</div>
+
+<!-- PÁGINA: SINCRONIZAÇÃO -->
+<div id="page-sync" class="page">
+    <div class="toolbar">
+        <h1>Sincronização <span class="online-dot" id="onlineDot"></span></h1>
+    </div>
+    <div class="container">
+
+        <!-- AUTH -->
+        <div id="authBox">
+            <div class="auth-box" id="loginBox">
+                <h2>Fazer Login</h2>
+                <p>Entre com a sua conta para sincronizar dados</p>
+                <label>Email</label>
+                <input type="email" id="loginEmail">
+                <label>Senha</label>
+                <input type="password" id="loginPassword">
+                <div style="margin-top:15px">
+                    <button class="btn btn-green" style="width:100%" onclick="fazerLogin()">
+                        <i class="fas fa-sign-in-alt"></i> Entrar
+                    </button>
+                </div>
+                <div class="auth-link">
+                    Não tem conta? <a href="#" onclick="mostrarCadastro()">Criar conta</a>
+                </div>
+            </div>
+
+            <div class="auth-box" id="cadastroBox" style="display:none">
+                <h2>Criar Conta</h2>
+                <p>Registe-se para guardar os dados na nuvem</p>
+                <label>Email</label>
+                <input type="email" id="cadastroEmail">
+                <label>Senha</label>
+                <input type="password" id="cadastroPassword">
+                <label>Confirmar Senha</label>
+                <input type="password" id="cadastroConfirm">
+                <div style="margin-top:15px">
+                    <button class="btn btn-green" style="width:100%" onclick="fazerCadastro()">
+                        <i class="fas fa-user-plus"></i> Criar Conta
+                    </button>
+                </div>
+                <div class="auth-link">
+                    Já tem conta? <a href="#" onclick="mostrarLogin()">Fazer login</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- SYNC SECTION -->
+        <div id="syncBox" style="display:none">
+            <div class="sync-info">
+                <h3>Conta Conectada</h3>
+                <p><strong>Email:</strong> <span id="syncEmail"></span></p>
+                <p><strong>Última sincronização:</strong> <span id="syncData">Nunca</span></p>
+            </div>
+            <div class="btn-group">
+                <button class="btn btn-green" onclick="enviarNuvem()">
+                    <i class="fas fa-cloud-upload-alt"></i> Enviar
+                </button>
+                <button class="btn btn-blue" onclick="baixarNuvem()">
+                    <i class="fas fa-cloud-download-alt"></i> Baixar
+                </button>
+            </div>
+            <div style="margin-top:15px">
+                <button class="btn btn-gray" style="width:100%" onclick="fazerLogout()">
+                    <i class="fas fa-sign-out-alt"></i> Sair da Conta
+                </button>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- MODAL -->
+<div class="modal" id="modal">
+    <div class="modal-box">
+        <h2>Relatório Gerado</h2>
+        <div class="relatorio-preview" id="modalTexto"></div>
+        <div style="display:flex;gap:8px">
+            <button class="btn btn-gray" onclick="copiarTexto()"><i class="fas fa-copy"></i> Copiar</button>
+            <button class="btn btn-gray" onclick="fecharModal()"><i class="fas fa-times"></i> Fechar</button>
+        </div>
+    </div>
+</div>
+
+<!-- LOADING -->
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-box">
+        <i class="fas fa-circle-notch fa-spin"></i>
+        <p id="loadingMsg">Carregando...</p>
+    </div>
+</div>
+
+<!-- TOAST -->
+<div class="success-toast" id="toast"></div>
+
+<!-- INSTALL BAR -->
+<div class="install-bar" id="installBar">
+    <i class="fas fa-mobile-alt" style="color:#2e7d32;font-size:1.5rem"></i>
+    <span>Instalar aplicativo no seu dispositivo</span>
+    <button class="btn btn-green" id="btnInstall" style="padding:6px 12px;font-size:0.8rem">Instalar</button>
+    <button class="btn btn-gray" id="btnDismiss" style="padding:6px 10px;font-size:0.8rem"><i class="fas fa-times"></i></button>
+</div>
+
+<!-- NAV -->
+<div class="nav-bar">
+    <div class="nav-item active" onclick="irPara('form')">
+        <i class="fas fa-edit"></i><span>Formulário</span>
+    </div>
+    <div class="nav-item" onclick="irPara('historico')">
+        <i class="fas fa-folder-open"></i><span>Histórico</span>
+    </div>
+    <div class="nav-item" onclick="irPara('stats')">
+        <i class="fas fa-chart-bar"></i><span>Estatísticas</span>
+    </div>
+    <div class="nav-item" onclick="irPara('sync')">
+        <i class="fas fa-cloud"></i><span>Nuvem</span>
+    </div>
+</div>
+
+<script src="script.js"></script>
 </body>
 </html>
